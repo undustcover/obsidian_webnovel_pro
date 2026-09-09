@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "console.context.v1",
+  "title": "Novel Console Context Plan v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "planId", "target", "generatedAt", "snapshotVersion", "policy", "items", "conflicts"],
+  "properties": {
+    "schemaVersion": { "const": "console.context.v1" },
+    "planId": { "type": "string", "minLength": 1 },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "key"],
+      "properties": {
+        "kind": { "enum": ["focus", "event", "milestone", "storyline", "chapter", "unit", "task", "character", "custom"] },
+        "key": { "type": "string", "minLength": 1 }
+      }
+    },
+    "generatedAt": { "type": "string", "format": "date-time" },
+    "snapshotVersion": { "type": "string", "minLength": 1 },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["relationDepth", "eventPrerequisiteDepth", "defaultGovernance"],
+      "properties": {
+        "relationDepth": { "type": "integer", "minimum": 0, "maximum": 5 },
+        "eventPrerequisiteDepth": { "type": "integer", "minimum": 0, "maximum": 5 },
+        "defaultGovernance": { "const": "canon-active-current" }
+      }
+    },
+    "items": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/contextItem" }
+    },
+    "conflicts": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  },
+  "$defs": {
+    "contextItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "path", "type", "title", "inclusion", "reasons", "relationship", "canon", "lifecycleStatus", "contextScope", "reviewStatus", "containsUnrevealed", "knowledgeBoundary", "hasConflict", "modifiedAt", "summary"],
+      "properties": {
+        "key": { "type": "string", "minLength": 1 },
+        "id": { "type": "string" },
+        "path": { "type": "string", "minLength": 1, "pattern": "^[^\\\\].*" },
+        "anchor": { "type": "string" },
+        "type": { "type": "string", "minLength": 1 },
+        "title": { "type": "string" },
+        "inclusion": { "enum": ["auto_included", "manual_included", "manual_excluded"] },
+        "reasons": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+        "relationship": { "type": "string" },
+        "canon": { "enum": ["canon", "candidate", "conflict", "unknown"] },
+        "lifecycleStatus": { "enum": ["active", "deprecated", "archived", "unknown"] },
+        "contextScope": { "enum": ["current", "history", "test", "draft", "unknown"] },
+        "reviewStatus": { "enum": ["author_confirmed", "pending_review", "unknown"] },
+        "containsUnrevealed": { "type": "boolean" },
+        "knowledgeBoundary": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["reader", "pov", "allowedReveal"],
+          "properties": {
+            "reader": { "type": "string" },
+            "pov": { "type": "object", "additionalProperties": { "type": "string" } },
+            "allowedReveal": { "type": "string" }
+          }
+        },
+        "hasConflict": { "type": "boolean" },
+        "modifiedAt": { "type": "string", "format": "date-time" },
+        "lastReviewed": { "type": "string", "format": "date-time" },
+        "summary": { "type": "string" }
+      }
+    }
+  }
+}

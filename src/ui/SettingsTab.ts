@@ -1,0 +1,2441 @@
+import type { App, TextAreaComponent } from 'obsidian';
+import { Modal, PluginSettingTab, Setting, Notice, TFile, MarkdownView } from 'obsidian';
+import type { Plugin } from 'obsidian';
+import { isDesktop, isMobile, getPlatformTier } from '../utils/platform';
+import { ObsOverlayServer } from '../services/ObsServer';
+import { ChapterSorter } from '../services/ChapterSorter';
+import { MobileFloatingStats } from './MobileFloatingStats';
+import type { FloatingStickyNote } from './StickyNote';
+import type { ThemeScheme } from '../types/settings';
+import { WORKBENCH_BOARD_IDS, getWorkbenchBoardLabel } from './workbenchBoards';
+import { VALIDATION_RULES, DEFAULT_PROOFREADING_SETTINGS } from '../constants';
+import type { WebNovelAssistantPlugin } from '../types/plugin';
+import { t, setLocale, detectLocale, type Locale } from '../i18n';
+import { getDefaultFileName } from '../i18n/data-keys';
+import { FolderSuggestModal } from './FolderSuggestModal';
+import { FileSuggestModal } from './FileSuggestModal';
+import { Logger } from '../utils/Logger';
+import { formatIgnoredContextSnippet } from '../utils/proofreadingHelpers';
+import { normalizeConsoleProjects } from '../console/config';
+
+class HistoryRestoreConfirmModal extends Modal {
+	constructor(app: App, private onConfirm: () => Promise<void>) {
+		super(app);
+	}
+
+	onOpen(): void {
+		new Setting(this.contentEl)
+			.setName(t('setting.history-restore-confirm-title'))
+			.setDesc(t('setting.history-restore-confirm-desc'))
+			.setHeading();
+
+		new Setting(this.contentEl)
+			.addButton(button => button
+				.setButtonText(t('common.cancel'))
+				.onClick(() => this.close()))
+			.addButton(button => button
+				.setButtonText(t('setting.history-restore-button'))
+				.setWarning()
+				.onClick(async () => {
+					button.setDisabled(true);
+					try {
+						await this.onConfirm();
+						this.close();
+					} catch (error) {
+						Logger.error('[SettingsTab] 恢复历史数据失败:', error);
+						new Notice(t('notice.history-restore-failed'));
+						button.setDisabled(false);
+					}
+				}));
+	}
+
+	onClose(): void {
+		this.contentEl.empty();
+	}
+}
+
+/**
+ * 插件设置面板
+ * 提供所有配置选项的界面
+ */
+export class AccurateCountSettingTab extends PluginSettingTab {
+	plugin: WebNovelAssistantPlugin;
+	private activeTab: string = 'general';
+
+	constructor(app: App, plugin: WebNovelAssistantPlugin) {
+		super(app, plugin as unknown as Plugin);
+		this.plugin = plugin;
+	}
+
+	public getSettingDefinitions(): Record<string, unknown> {
+		// Provide a dummy record to satisfy obsidianmd/no-missing-setting-definitions 
+		// for Obsidian 1.13.0+ since we use the imperative display() API.
+		return {};
+	}
+
+	display(): void {
+		const { containerEl } = this;
+		const scrollTop = containerEl.scrollTop;
+		containerEl.empty();
+
+
+		// Add GitHub link box
+		const githubBox = containerEl.createDiv({
+			cls: 'wn-settings-banner'
+		});
+		githubBox.createSpan({ text: t('setting.github-guide-prefix'), cls: 'text-muted' });
+		githubBox.createEl('a', {
+			text: 'HatanoChihiro/obsidian-webnovel-assistant',
+			href: 'https://github.com/HatanoChihiro/obsidian-webnovel-assistant/releases',
+			cls: 'wn-github-link'
+		});
+
+		// 创建选项卡头部
+		const navContainer = containerEl.createDiv({ cls: 'webnovel-settings-tabs' });
+		const tier = getPlatformTier();
+		const allTabs = [
+			{ id: 'general', name: t('setting.tab-general') },
+			{ id: 'typography', name: t('setting.tab-typography'), icon: 'align-left' },
+			{ id: 'proofreading', name: t('setting.proofreading-title'), icon: 'spell-check' },
+			{ id: 'wordcount', name: t('setting.tab-wordcount') },
+			{ id: 'creative', name: t('setting.tab-creative'), icon: 'pen-tool' },
+			{ id: 'immersive', name: t('setting.tab-immersive'), icon: 'maximize', desktopOnly: true },
+			{ id: 'obs', name: t('setting.tab-obs'), desktopOnly: true }
+		];
+
+		const tabs = allTabs.filter(tab => {
+			if (tier === 'desktop') return true;
+			return !tab.desktopOnly;
+		});
+
+		tabs.forEach(tab => {
+			const tabEl = navContainer.createDiv({
+				cls: `webnovel-tab-item ${this.activeTab === tab.id ? 'is-active' : ''}`,
+				text: tab.name
+			});
+			tabEl.onclick = () => {
+				this.activeTab = tab.id;
+				this.display();
+			};
+		});
+
+		// 渲染对应选项卡内容
+		if (this.activeTab === 'general') {
+			this.displayGeneralSettings(containerEl);
+		} else if (this.activeTab === 'typography') {
+			this.displayTypographySettings(containerEl);
+		} else if (this.activeTab === 'proofreading') {
+			this.displayProofreadingSettings(containerEl);
+		} else if (this.activeTab === 'wordcount') {
+			this.displayWordCountSettings(containerEl);
+		} else if (this.activeTab === 'creative') {
+			this.displayCreativeSettings(containerEl);
+		} else if (this.activeTab === 'immersive') {
+			this.displayImmersiveModeSettings(containerEl);
+		} else if (this.activeTab === 'obs') {
+			this.displayDataSettings(containerEl);
+		}
+
+		// 同步恢复滚动位置，在浏览器完成绘制前生效，避免延迟执行导致的画面跳动
+		containerEl.scrollTo(0, scrollTop);
+	}
+
+	// ── 通用设置 ──
+	private displayGeneralSettings(containerEl: HTMLElement): void {
+		// 平台检测提示
+		const tier = getPlatformTier();
+		if (tier !== 'desktop') {
+			const mobileNotice = containerEl.createDiv({
+				cls: 'setting-item-description wn-settings-warning'
+			});
+			mobileNotice.createEl('strong', { text: tier === 'mobile' ? t('setting.mobile-mode') : t('setting.tablet-mode') });
+			mobileNotice.createEl('br');
+			mobileNotice.appendText(tier === 'mobile'
+				? t('setting.mobile-notice')
+				: t('setting.tablet-notice'));
+
+			new Setting(containerEl)
+				.setName(t('setting.show-floating-stats'))
+				.setDesc(t('setting.show-floating-stats-desc'))
+				.addToggle(toggle => toggle
+					.setValue(this.plugin.settings.showMobileFloatingStats)
+					.onChange(async (value) => {
+						this.plugin.settings.showMobileFloatingStats = value;
+						void this.plugin.saveSettings();
+						if (value) {
+							if (!this.plugin.mobileFloatingStats) this.plugin.mobileFloatingStats = new MobileFloatingStats(this.app, this.plugin);
+							this.plugin.mobileFloatingStats.load();
+						} else {
+							this.plugin.mobileFloatingStats?.unload();
+						}
+					}));
+
+			new Setting(containerEl)
+				.setName(t('setting.enable-mobile-focus-timer'))
+				.setDesc(t('setting.enable-mobile-focus-timer-desc'))
+				.addToggle(toggle => toggle
+					.setValue(this.plugin.settings.enableMobileFocusTimer)
+					.onChange(async (value) => {
+						this.plugin.settings.enableMobileFocusTimer = value;
+						void this.plugin.saveSettings();
+						this.plugin.mobileFloatingStats?.update();
+						this.display();
+					}));
+
+			if (this.plugin.settings.enableMobileFocusTimer) {
+				new Setting(containerEl)
+					.setName(t('setting.idle-threshold'))
+					.setDesc(t('setting.idle-threshold-desc'))
+					.addSlider(slider => slider
+						.setLimits(30, 600, 30)
+						.setValue(this.plugin.settings.idleTimeoutThreshold / 1000)
+						.setDynamicTooltip()
+						.onChange(async (value) => {
+							this.plugin.settings.idleTimeoutThreshold = value * 1000;
+							await this.plugin.saveSettings();
+						}));
+			}
+		}
+
+		// 语言切换
+		new Setting(containerEl).setName(t('setting.language')).setDesc(t('setting.language-desc'))
+			.addDropdown(dropdown => {
+				dropdown.addOption('zh-CN', '中文 (Chinese)');
+				dropdown.addOption('en', 'English');
+				dropdown.addOption('auto', t('setting.language-auto'));
+				dropdown.setValue(this.plugin.settings.language || 'auto');
+				dropdown.onChange(async (value: string) => {
+					const locale = value === 'auto' ? detectLocale() : value as Locale;
+					this.plugin.settings.language = value as 'zh-CN' | 'en' | 'auto';
+					await setLocale(locale);
+					void this.plugin.saveSettings();
+					// 语言切换后刷新设置面板
+					this.display();
+				});
+			});
+
+		new Setting(containerEl).setName(t('setting.workspace-and-chapters')).setHeading();
+
+		new Setting(containerEl)
+			.setName(t('setting.novel-info-filename'))
+			.setDesc(t('setting.novel-info-filename-desc'))
+			.addText(text => {
+				const oldName = this.plugin.settings.novelInfo?.fileName || getDefaultFileName('novelInfoFileName');
+				text.setPlaceholder(getDefaultFileName('novelInfoFileName'))
+					.setValue(oldName);
+				let tempValue = oldName;
+				text.onChange((value) => { tempValue = value.trim().replace(/.md$/i, ''); });
+
+				const saveAction = async () => {
+					const newName = tempValue || getDefaultFileName('novelInfoFileName');
+					if (newName === oldName) return;
+					if (!this.plugin.settings.novelInfo) { this.plugin.settings.novelInfo = { fileName: newName }; }
+					else { this.plugin.settings.novelInfo.fileName = newName; }
+					await this.plugin.saveSettings();
+					const count = await this.plugin.renameAllFunctionalFiles(oldName, newName, 'file', 'novelInfoFileName');
+					if (count > 0) new Notice(t('notice.files-renamed', { count: String(count) }));
+				};
+
+				text.inputEl.addEventListener('change', () => { saveAction().catch(console.error); });
+				text.inputEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); text.inputEl.blur(); } });
+			});
+		new Setting(containerEl)
+			.setName(t('setting.enable-homepage'))
+			.setDesc(t('setting.enable-homepage-desc'))
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.enableHomepage)
+				.onChange(async (value) => {
+					this.plugin.settings.enableHomepage = value;
+					await this.plugin.saveSettings();
+					if (value) {
+						this.plugin.homepageManager?.ensureHomepageExists().catch(err => console.error('主页创建失败:', err));
+						this.plugin.homepageManager?.ensureNovelInfoFiles().catch(err => console.error('作品信息创建失败:', err));
+					} else {
+						this.plugin.homepageManager?.deleteHomepage().catch(err => console.error('主页删除失败:', err));
+					}
+					this.display();
+				}));
+
+		if (this.plugin.settings.enableHomepage) {
+			new Setting(containerEl)
+				.setName(t('setting.open-homepage-on-startup'))
+				.setDesc(t('setting.open-homepage-on-startup-desc'))
+				.addToggle(toggle => toggle
+					.setValue(this.plugin.settings.openHomepageOnStartup)
+					.onChange(async (value) => {
+						this.plugin.settings.openHomepageOnStartup = value;
+						await this.plugin.saveSettings();
+					}));
+
+			new Setting(containerEl)
+				.setName(t('setting.custom-homepage-filename'))
+				.setDesc(t('setting.custom-homepage-filename-desc'))
+				.addText(text => {
+					const currentPath = this.plugin.homepageManager?.getHomepageFilePath() || `${t('common.default-homepage-name')}.md`;
+					const currentName = currentPath.split('/').pop()?.replace(/\.md$/, '') || t('common.default-homepage-name');
+
+					text.setPlaceholder(t('setting.homepage-filename-placeholder'))
+						.setValue(currentName);
+
+					let tempValue = text.getValue();
+					text.onChange((value) => { tempValue = value; });
+
+					const saveAction = async () => {
+						const basename = tempValue.trim() || t('common.default-homepage-name');
+						const oldPath = this.plugin.homepageManager?.getHomepageFilePath() || `${t('common.default-homepage-name')}.md`;
+
+						const lastSlash = oldPath.lastIndexOf('/');
+						const oldDir = lastSlash >= 0 ? oldPath.substring(0, lastSlash + 1) : '';
+						const newPath = oldDir + basename + '.md';
+
+						if (newPath !== oldPath) {
+							this.plugin.settings.homepagePath = newPath;
+							await this.plugin.saveSettings();
+							this.plugin.homepageManager?.renameHomepageFile(oldPath, newPath).catch(console.error);
+							new Notice(t('notice.homepage-renamed', { name: basename }));
+						}
+					};
+
+					text.inputEl.addEventListener('change', () => { saveAction().catch(console.error); });
+					// 按回车也可以保存
+					text.inputEl.addEventListener('keydown', (e) => {
+						if (e.key === 'Enter') {
+							e.preventDefault();
+							text.inputEl.blur();
+						}
+					});
+				});
+
+			new Setting(containerEl)
+				.setName(t('setting.custom-welcome'))
+				.setDesc(t('setting.custom-welcome-desc'))
+				.addText(text => text
+					.setPlaceholder(t('common.default-welcome'))
+					.setValue(this.plugin.settings.homepageWelcome || '')
+					.onChange(async (value) => {
+						this.plugin.settings.homepageWelcome = value.trim();
+						await this.plugin.saveSettings();
+						this.plugin.homepageManager?.refreshHomepageViews();
+					}));
+
+			new Setting(containerEl)
+				.setName(t('setting.homepage-pin-position'))
+				.setDesc(t('setting.homepage-pin-position-desc'))
+				.addDropdown(dropdown => dropdown
+					.addOptions({
+						'none': t('setting.pin-none'),
+						'top': t('setting.pin-top'),
+						'bottom': t('setting.pin-bottom')
+					})
+					.setValue(this.plugin.settings.homepagePinPosition || 'top')
+					.onChange(async (value: string) => {
+						this.plugin.settings.homepagePinPosition = value as 'none' | 'top' | 'bottom';
+						await this.plugin.saveSettings();
+						if (value !== 'none') {
+							this.plugin.fileExplorerPatcher.enable();
+						}
+						// 触发文件树刷新
+						this.app.workspace.getLeavesOfType('file-explorer').forEach(leaf => {
+							const view = leaf.view as unknown as Record<string, unknown>;
+							if (view && typeof view.sort === 'function') {
+								try { (view.sort as () => void)(); } catch { /* 内部 API，容错处理 */ }
+							}
+						});
+					}));
+		}
+
+		let workspaceTextComponent: TextAreaComponent | null = null;
+		let workspaceTempValue = (this.plugin.settings.workspaceFolders || []).join(', ');
+
+		const saveWorkspaceAction = async () => {
+			const oldFolders = this.plugin.settings.workspaceFolders || [];
+			const oldFirst = oldFolders.length > 0 ? oldFolders[0].replace(/^\/+|\/+$/g, '') : '';
+
+			// 记录在改变 workspaceFolders 之前的旧主页路径
+			const currentPath = this.plugin.homepageManager?.getHomepageFilePath();
+
+			const parsedFolders = workspaceTempValue.trim() ? workspaceTempValue.split(/[,，]+/).map(f => f.trim()).filter(Boolean) : [];
+
+			if (JSON.stringify(oldFolders) === JSON.stringify(parsedFolders)) {
+				return;
+			}
+
+			this.plugin.settings.workspaceFolders = parsedFolders;
+			const newFolders = this.plugin.settings.workspaceFolders;
+			const newFirst = newFolders.length > 0 ? newFolders[0].replace(/^\/+|\/+$/g, '') : '';
+
+			if (oldFirst !== newFirst) {
+				if (currentPath) {
+					const basename = currentPath.split('/').pop() || `${t('common.default-homepage-name')}.md`;
+					const expectedOldPath = oldFirst ? `${oldFirst}/${basename}` : basename;
+
+					// 如果当前主页在原工作区根目录下，自动跟随移动到新工作区
+					if (currentPath === expectedOldPath) {
+						const newPath = newFirst ? `${newFirst}/${basename}` : basename;
+						this.plugin.settings.homepagePath = newPath;
+						this.plugin.homepageManager?.renameHomepageFile(currentPath, newPath).catch(console.error);
+					}
+				}
+
+				if (this.plugin.proofreadingManager) {
+					await this.plugin.proofreadingManager.relocateDefaultDictionary(oldFirst, newFirst);
+				}
+			}
+
+			await this.plugin.saveSettings();
+			this.plugin.cacheManager?.resetLoreCache();
+			this.plugin.cacheManager?.clearCache();
+			this.plugin.updateWordCount();
+			if (this.plugin.settings.showExplorerCounts) {
+				void this.plugin.buildFolderCache();
+			}
+			this.plugin.homepageManager?.refreshHomepageViews();
+		};
+
+		new Setting(containerEl)
+			.setName(t('setting.workspace-folders'))
+			.setDesc(t('setting.workspace-folders-desc'))
+			.addExtraButton(btn => btn
+				.setIcon('folder')
+				.setTooltip(t('setting.select-folder-tooltip'))
+				.onClick(() => {
+					new FolderSuggestModal(this.app, (folder) => {
+						const currentArr = workspaceTempValue.trim() ? workspaceTempValue.split(/[,，]+/).map(f => f.trim()).filter(Boolean) : [];
+						if (!currentArr.includes(folder.path)) {
+							currentArr.push(folder.path);
+							workspaceTempValue = currentArr.join(', ');
+							workspaceTextComponent?.setValue(workspaceTempValue);
+							saveWorkspaceAction().catch(console.error);
+						}
+					}).open();
+				}))
+			.addTextArea(text => {
+				workspaceTextComponent = text;
+				text.setPlaceholder(t('setting.workspace-folders-placeholder'))
+					.setValue(workspaceTempValue);
+
+				text.onChange((value) => {
+					workspaceTempValue = value;
+				});
+
+				text.inputEl.addEventListener('change', () => { saveWorkspaceAction().catch(console.error); });
+				text.inputEl.addClass('webnovel-settings-input-full');
+			});
+
+		let consoleProjectsTempValue = JSON.stringify(this.plugin.settings.consoleProjects || [], null, 2);
+		const saveConsoleProjectsAction = async () => {
+			let parsed: unknown;
+			try {
+				parsed = consoleProjectsTempValue.trim() ? JSON.parse(consoleProjectsTempValue) : [];
+			} catch {
+				new Notice(t('notice.console-projects-invalid-json'));
+				return;
+			}
+			const normalized = normalizeConsoleProjects(parsed);
+			if (normalized.diagnostics.length > 0) {
+				new Notice(`${t('notice.console-projects-invalid')}: ${normalized.diagnostics[0]?.message || ''}`);
+				return;
+			}
+			if (JSON.stringify(this.plugin.settings.consoleProjects) === JSON.stringify(normalized.projects)) return;
+			this.plugin.settings.consoleProjects = normalized.projects;
+			consoleProjectsTempValue = JSON.stringify(normalized.projects, null, 2);
+			await this.plugin.saveSettings();
+			new Notice(t('notice.console-projects-saved'));
+		};
+
+		new Setting(containerEl)
+			.setName(t('setting.console-projects'))
+			.setDesc(t('setting.console-projects-desc'))
+			.addTextArea(text => {
+				text.setPlaceholder(t('setting.console-projects-placeholder'))
+					.setValue(consoleProjectsTempValue)
+					.onChange(value => { consoleProjectsTempValue = value; });
+				text.inputEl.rows = 8;
+				text.inputEl.addEventListener('change', () => { void saveConsoleProjectsAction(); });
+				text.inputEl.addClass('webnovel-settings-input-full');
+			});
+
+		new Setting(containerEl)
+			.setName(t('setting.strict-chapter-mode'))
+			.setDesc(t('setting.strict-chapter-mode-desc'))
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.enableStrictChapterMode)
+				.onChange(async (value) => {
+					this.plugin.settings.enableStrictChapterMode = value;
+					await this.plugin.saveSettings();
+					this.plugin.cacheManager?.resetLoreCache();
+					this.plugin.cacheManager?.clearCache();
+					this.plugin.updateWordCount();
+					if (this.plugin.settings.showExplorerCounts) {
+						void this.plugin.buildFolderCache();
+					}
+					this.plugin.homepageManager?.refreshHomepageViews();
+					this.display();
+				}));
+		if (this.plugin.settings.enableStrictChapterMode) {
+			let exceptionTextComponent: TextAreaComponent | null = null;
+			let exceptionTempValue = (this.plugin.settings.strictChapterExceptions || []).join(', ');
+
+			const saveExceptionAction = async () => {
+				const oldExceptions = this.plugin.settings.strictChapterExceptions || [];
+				const parsedExceptions = exceptionTempValue.trim() ? exceptionTempValue.split(/[,，]+/).map(f => f.trim()).filter(Boolean) : [];
+
+				if (JSON.stringify(oldExceptions) === JSON.stringify(parsedExceptions)) {
+					return;
+				}
+
+				this.plugin.settings.strictChapterExceptions = parsedExceptions;
+				await this.plugin.saveSettings();
+				this.plugin.cacheManager?.resetLoreCache();
+				this.plugin.cacheManager?.clearCache();
+				this.plugin.updateWordCount();
+				if (this.plugin.settings.showExplorerCounts) {
+					void this.plugin.buildFolderCache();
+				}
+				this.plugin.homepageManager?.refreshHomepageViews();
+			};
+
+			new Setting(containerEl)
+				.setName(t('setting.exception-directories'))
+				.setDesc(t('setting.exception-directories-desc'))
+				.addExtraButton(btn => btn
+					.setIcon('folder')
+					.setTooltip(t('setting.select-folder-tooltip'))
+					.onClick(() => {
+						new FolderSuggestModal(this.app, (folder) => {
+							const currentArr = exceptionTempValue.trim() ? exceptionTempValue.split(/[,，]+/).map(f => f.trim()).filter(Boolean) : [];
+							if (!currentArr.includes(folder.path)) {
+								currentArr.push(folder.path);
+								exceptionTempValue = currentArr.join(', ');
+								exceptionTextComponent?.setValue(exceptionTempValue);
+								saveExceptionAction().catch(console.error);
+							}
+						}).open();
+					}))
+				.addTextArea(text => {
+					exceptionTextComponent = text;
+					text
+						.setPlaceholder(t('setting.exception-directories-placeholder'))
+						.setValue(exceptionTempValue);
+
+					text.onChange((value) => {
+						exceptionTempValue = value;
+					});
+
+					text.inputEl.addEventListener('change', () => { saveExceptionAction().catch(console.error); });
+					text.inputEl.addClass('webnovel-settings-input-full');
+				});
+		}
+
+		new Setting(containerEl)
+			.setName(t('setting.chapter-template'))
+			.setDesc(t('setting.chapter-template-desc'))
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.enableChapterTemplate)
+				.onChange(async (value) => {
+					this.plugin.settings.enableChapterTemplate = value;
+					await this.plugin.saveSettings();
+					this.display();
+				}));
+
+		if (this.plugin.settings.enableChapterTemplate) {
+			if (!Array.isArray(this.plugin.settings.chapterTemplatePaths)) {
+				this.plugin.settings.chapterTemplatePaths = [];
+			}
+			if (this.plugin.settings.chapterTemplatePath && !this.plugin.settings.chapterTemplatePaths.includes(this.plugin.settings.chapterTemplatePath)) {
+				this.plugin.settings.chapterTemplatePaths.push(this.plugin.settings.chapterTemplatePath);
+			}
+
+			const templatePaths = this.plugin.settings.chapterTemplatePaths;
+
+			new Setting(containerEl)
+				.setName(t('setting.chapter-template-list'))
+				.setDesc(t('setting.chapter-template-list-desc'))
+				.addButton(btn => btn
+					.setButtonText(t('setting.btn-add-template-file'))
+					.setCta()
+					.onClick(() => {
+						new FileSuggestModal(this.app, (file) => {
+							if (!this.plugin.settings.chapterTemplatePaths.includes(file.path)) {
+								this.plugin.settings.chapterTemplatePaths.push(file.path);
+								this.plugin.settings.chapterTemplatePath = this.plugin.settings.chapterTemplatePaths[0] || '';
+								void this.plugin.saveSettings();
+								this.display();
+							}
+						}).open();
+					}));
+
+			if (templatePaths.length === 0) {
+				new Setting(containerEl)
+					.setDesc(t('setting.chapter-template-list-empty'));
+			} else {
+				templatePaths.forEach((path, index) => {
+					const file = this.app.vault.getAbstractFileByPath(path);
+					const displayName: string = (file instanceof TFile) ? file.basename : path;
+					new Setting(containerEl)
+						.setName(`${index + 1}. ${displayName}`)
+						.setDesc(path)
+						.addExtraButton(btn => btn
+							.setIcon('trash')
+							.setTooltip(t('setting.remove-template-file-tooltip'))
+							.onClick(async () => {
+								this.plugin.settings.chapterTemplatePaths.splice(index, 1);
+								this.plugin.settings.chapterTemplatePath = this.plugin.settings.chapterTemplatePaths[0] || '';
+								await this.plugin.saveSettings();
+								this.display();
+							}));
+				});
+			}
+		}
+
+		new Setting(containerEl)
+			.setName(t('setting.smart-chapter-sort'))
+			.setDesc(t('setting.smart-chapter-sort-desc'))
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.enableSmartChapterSort)
+				.onChange(async (value) => {
+					this.plugin.settings.enableSmartChapterSort = value;
+					await this.plugin.saveSettings();
+					if (value) this.plugin.fileExplorerPatcher.enable();
+					else this.plugin.fileExplorerPatcher.disable();
+					this.display();
+				}));
+
+		if (this.plugin.settings.enableSmartChapterSort) {
+			this.displaySortingRules(containerEl);
+		}
+
+		new Setting(containerEl)
+			.setName(t('setting.workbench-boards-visibility'))
+			.setDesc(t('setting.workbench-boards-visibility-desc'));
+
+		const currentVisibility = this.plugin.settings.workbenchBoardVisibility || {
+			default: true,
+			timeline: true,
+			lore: true,
+			foreshadowing: true,
+			task: true,
+			journey: true
+		};
+
+		WORKBENCH_BOARD_IDS.forEach(boardId => {
+			new Setting(containerEl)
+				.setName(getWorkbenchBoardLabel(boardId))
+				.addToggle(toggle => toggle
+					.setValue(currentVisibility[boardId] ?? true)
+					.onChange(async (value) => {
+						if (!this.plugin.settings.workbenchBoardVisibility) {
+							this.plugin.settings.workbenchBoardVisibility = {
+								default: true,
+								timeline: true,
+								lore: true,
+								foreshadowing: true,
+								task: true,
+								journey: true
+							};
+						}
+						this.plugin.settings.workbenchBoardVisibility[boardId] = value;
+						await this.plugin.saveSettings();
+						this.app.workspace.trigger('webnovel-workbench-boards-changed');
+					}));
+		});
+	}
+
+	// ── 字数统计设置 ──
+	private displayWordCountSettings(containerEl: HTMLElement): void {
+		new Setting(containerEl).setName(t('setting.word-count-display')).setHeading();
+
+		new Setting(containerEl)
+			.setName(t('setting.word-count-mode'))
+			.setDesc(t('setting.word-count-mode-desc'))
+			.addDropdown(drop => drop
+				.addOption('webnovel', t('setting.mode-webnovel'))
+				.addOption('standard', t('setting.mode-standard'))
+				.addOption('obsidian', t('setting.mode-obsidian'))
+				.setValue(this.plugin.settings.wordCountMethod)
+				.onChange(async (value: string) => {
+					this.plugin.settings.wordCountMethod = value as 'webnovel' | 'standard' | 'obsidian';
+					await this.plugin.saveSettings();
+					new Notice(t('notice.word-count-recalculating'));
+					await this.plugin.buildFolderCache();
+					this.plugin.updateWordCount();
+				}));
+
+		new Setting(containerEl)
+			.setName(t('setting.show-status-bar-progress'))
+			.setDesc(t('setting.show-status-bar-progress-desc'))
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.showGoal)
+				.onChange(async (value) => {
+					this.plugin.settings.showGoal = value;
+					await this.plugin.saveSettings();
+					this.plugin.updateWordCount();
+				}));
+
+		new Setting(containerEl)
+			.setName(t('setting.show-explorer-counts'))
+			.setDesc(t('setting.show-explorer-counts-desc'))
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.showExplorerCounts)
+				.onChange(async (value) => {
+					this.plugin.settings.showExplorerCounts = value;
+					await this.plugin.saveSettings();
+					if (value) await this.plugin.buildFolderCache();
+					else this.plugin.refreshFolderCounts();
+				}));
+
+		new Setting(containerEl)
+			.setName(t('setting.enable-selection-count'))
+			.setDesc(t('setting.enable-selection-count-desc'))
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.enableSelectionWordCount)
+				.onChange(async (value) => {
+					this.plugin.settings.enableSelectionWordCount = value;
+					await this.plugin.saveSettings();
+				}));
+
+		if (isDesktop()) {
+			new Setting(containerEl)
+				.setName(t('setting.word-count-gutter'))
+				.setDesc(t('setting.word-count-gutter-desc'))
+				.addToggle(toggle => toggle
+					.setValue(this.plugin.settings.enableWordCountGutter)
+					.onChange(async (value) => {
+						this.plugin.settings.enableWordCountGutter = value;
+						await this.plugin.saveSettings();
+						this.app.workspace.trigger('webnovel:word-count-gutter-settings-changed');
+						this.display(); // 刷新界面以显示/隐藏间隔输入框
+					}));
+
+			if (this.plugin.settings.enableWordCountGutter) {
+				new Setting(containerEl)
+					.setName(t('setting.word-count-interval'))
+					.setDesc(t('setting.word-count-interval-desc'))
+					.addText(text => text
+						.setValue((this.plugin.settings.wordCountInterval || 2000).toString())
+						.onChange(async (v) => {
+							const p = parseInt(v, 10);
+							if (!isNaN(p) && p > 0) {
+								this.plugin.settings.wordCountInterval = p;
+								await this.plugin.saveSettings();
+								this.app.workspace.trigger('webnovel:word-count-gutter-settings-changed');
+							}
+						}));
+			}
+		}
+
+		new Setting(containerEl).setName(t('setting.writing-goals')).setHeading();
+
+		new Setting(containerEl)
+			.setName(t('setting.default-chapter-goal'))
+			.setDesc(t('setting.default-chapter-goal-desc'))
+			.addText(text => text.setValue(this.plugin.settings.defaultGoal.toString()).onChange(async (v) => {
+				const p = parseInt(v, 10); if (!isNaN(p)) { this.plugin.settings.defaultGoal = p; await this.plugin.saveSettings(); }
+			}));
+
+		new Setting(containerEl)
+			.setName(t('setting.daily-goal'))
+			.setDesc(t('setting.daily-goal-desc'))
+			.addText(text => text.setValue((this.plugin.settings.dailyGoal || 5000).toString()).onChange(async (v) => {
+				const p = parseInt(v, 10); if (!isNaN(p)) { this.plugin.settings.dailyGoal = p; await this.plugin.saveSettings(); }
+			}));
+	}
+
+	// ── 创作辅助设置 ──
+	private displayCreativeSettings(containerEl: HTMLElement): void {
+		this.displayEditorTypewriterSettings(containerEl);
+		this.displayStickyNoteSettings(containerEl);
+		this.displayForeshadowingSettings(containerEl);
+		this.displayTimelineSettings(containerEl);
+		this.displayTaskSettings(containerEl);
+		this.displayLoreSettings(containerEl);
+	}
+
+	// ── 校对设置 ──
+	private displayProofreadingSettings(containerEl: HTMLElement): void {
+		new Setting(containerEl).setName(t('setting.proofreading-title')).setHeading();
+
+		// 启用校对总开关
+		new Setting(containerEl)
+			.setName(t('setting.proofreading-enable'))
+			.setDesc(t('setting.proofreading-enable-desc'))
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.proofreading?.enabled ?? false)
+				.onChange(async (value: boolean) => {
+					if (!this.plugin.proofreadingManager) return;
+
+					try {
+						if (value) {
+							const success = await this.plugin.proofreadingManager.enable();
+							if (!success) {
+								new Notice(t('notice.proofreading-enable-failed'));
+							}
+						} else {
+							await this.plugin.proofreadingManager.disable();
+						}
+					} catch {
+						new Notice(t('notice.proofreading-enable-failed'));
+					} finally {
+						this.display();
+					}
+				}));
+
+		// 全库生效开关
+		new Setting(containerEl)
+			.setName(t('setting.proofreading-enable-global'))
+			.setDesc(t('setting.proofreading-enable-global-desc'))
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.proofreading?.enableGlobal ?? false)
+				.onChange(async (value: boolean) => {
+					if (!this.plugin.settings.proofreading) {
+						this.plugin.settings.proofreading = {
+							...DEFAULT_PROOFREADING_SETTINGS
+						};
+					}
+					this.plugin.settings.proofreading.enableGlobal = value;
+					await this.plugin.saveSettings();
+					this.plugin.proofreadingManager?.notifyRefresh();
+				}));
+
+		const currentDictPath = this.plugin.settings.proofreading?.dictionaryPath || '';
+
+		// 词典目录路径设置
+		const folderDesc = createFragment((frag) => {
+			frag.append(t('setting.proofreading-dict-folder-desc'));
+			frag.createEl('br');
+			frag.createSpan({
+				text: `${t('setting.proofreading-current-path-prefix')}: ${currentDictPath || t('common.none')}`,
+				cls: 'text-muted'
+			});
+		});
+
+		new Setting(containerEl)
+			.setName(t('setting.proofreading-dict-folder'))
+			.setDesc(folderDesc)
+			.addText(text => {
+				const defaultName = t('setting.proofreading-dict-folder-placeholder');
+				const currentBasename = currentDictPath ? currentDictPath.split('/').pop() || '' : defaultName;
+				text.setPlaceholder(defaultName)
+					.setValue(currentBasename);
+
+				let tempName = currentBasename;
+				text.onChange((val: string) => {
+					tempName = val.trim();
+				});
+
+				const renameAction = async () => {
+					if (!tempName || tempName === currentBasename) return;
+					if (!this.plugin.proofreadingManager) return;
+
+					const success = await this.plugin.proofreadingManager.renameDictionaryFolder(tempName);
+					if (success) {
+						new Notice(t('notice.proofreading-rename-success'));
+						this.display();
+					} else {
+						new Notice(t('notice.proofreading-rename-failed'));
+						text.setValue(currentBasename);
+					}
+				};
+
+				text.inputEl.addEventListener('change', () => { void renameAction(); });
+				text.inputEl.addEventListener('keydown', (e) => {
+					if (e.key === 'Enter') {
+						e.preventDefault();
+						text.inputEl.blur();
+					}
+				});
+			});
+
+		// 补全缺失模板按钮
+		new Setting(containerEl)
+			.setName(t('setting.proofreading-regenerate-templates'))
+			.setDesc(t('setting.proofreading-regenerate-templates-desc'))
+			.addButton(btn => btn
+				.setButtonText(t('setting.btn-regenerate-templates'))
+				.onClick(async () => {
+					if (!this.plugin.proofreadingManager) return;
+					try {
+						await this.plugin.proofreadingManager.regenerateMissingTemplates();
+						new Notice(t('notice.proofreading-templates-regenerated'));
+					} catch {
+						new Notice(t('notice.proofreading-regenerate-failed'));
+					}
+				}));
+
+		// 标点符号检查开关
+		new Setting(containerEl)
+			.setName(t('setting.proofreading-enable-punctuation'))
+			.setDesc(t('setting.proofreading-enable-punctuation-desc'))
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.proofreading?.enablePunctuation === true)
+				.onChange(async (value: boolean) => {
+					if (!this.plugin.settings.proofreading) {
+						this.plugin.settings.proofreading = {
+							...DEFAULT_PROOFREADING_SETTINGS
+						};
+					}
+					this.plugin.settings.proofreading.enablePunctuation = value;
+					await this.plugin.saveSettings();
+				}));
+
+		// 的/地/得检查实验开关
+		const dedideDictInfo = this.plugin.proofreadingManager?.getDeDiDeDictInfo();
+		const isDeDiDeDownloaded = dedideDictInfo?.source === 'online_cache' && (dedideDictInfo?.count ?? 0) > 0;
+
+		new Setting(containerEl)
+			.setName(t('setting.proofreading-enable-dedide'))
+			.setDesc(t('setting.proofreading-enable-dedide-desc'))
+			.addToggle(toggle => toggle
+				.setValue(isDeDiDeDownloaded ? (this.plugin.settings.proofreading?.enableDeDiDe ?? false) : false)
+				.setDisabled(!isDeDiDeDownloaded)
+				.onChange(async (value: boolean) => {
+					if (value && !isDeDiDeDownloaded) {
+						toggle.setValue(false);
+						new Notice(t('notice.proofreading-dedide-not-downloaded'));
+						return;
+					}
+					if (!this.plugin.settings.proofreading) {
+						this.plugin.settings.proofreading = {
+							...DEFAULT_PROOFREADING_SETTINGS
+						};
+					}
+					this.plugin.settings.proofreading.enableDeDiDe = value;
+					await this.plugin.saveSettings();
+					if (this.plugin.proofreadingManager) {
+						await this.plugin.proofreadingManager.loadDictionaries();
+					}
+				}));
+
+		// 基本错词库与手动更新
+		const basicDictInfo = this.plugin.proofreadingManager?.getBasicDictInfo();
+		const isBasicDownloaded = basicDictInfo?.source === 'online_cache';
+		const sourceLabel = isBasicDownloaded
+			? t('setting.proofreading-basic-dict-source-online')
+			: t('setting.proofreading-basic-dict-source-not-downloaded');
+		const versionLabel = isBasicDownloaded && basicDictInfo?.version
+			? basicDictInfo.version
+			: '-';
+		const countLabel = String(basicDictInfo?.count ?? 0);
+
+		const basicDictDesc = createFragment((frag) => {
+			frag.append(t('setting.proofreading-basic-dict-desc'));
+			frag.createEl('br');
+			frag.createSpan({
+				text: t('setting.proofreading-basic-dict-status', {
+					source: sourceLabel,
+					version: versionLabel,
+					count: countLabel
+				}),
+				cls: 'text-muted'
+			});
+			if (basicDictInfo?.isLarge) {
+				frag.createEl('br');
+				frag.createSpan({
+					text: t('setting.proofreading-basic-dict-large-advisory'),
+					cls: 'wn-settings-warning'
+				});
+			}
+		});
+
+		new Setting(containerEl)
+			.setName(t('setting.proofreading-basic-dict'))
+			.setDesc(basicDictDesc)
+			.addButton(btn => btn
+				.setButtonText(t('setting.btn-update-basic-dict'))
+				.onClick(async () => {
+					if (!this.plugin.proofreadingManager) return;
+					btn.setDisabled(true);
+					btn.setButtonText(t('setting.btn-updating-basic-dict'));
+
+					try {
+						const res = await this.plugin.proofreadingManager.updateBasicDictionary();
+						if (res.status === 'updated') {
+							new Notice(t('notice.proofreading-dict-updated', {
+								version: res.version || '',
+								count: String(res.count ?? 0)
+							}));
+							if (res.isLarge) {
+								new Notice(t('notice.proofreading-dict-large-warn', {
+									count: String(res.count ?? 0)
+								}));
+							}
+						} else if (res.status === 'already-current') {
+							new Notice(t('notice.proofreading-dict-already-latest', {
+								version: res.version || ''
+							}));
+						} else {
+							if (res.failureReason === 'network_error') {
+								new Notice(t('notice.proofreading-dict-network-error', { error: res.errorMessage || '' }));
+							} else if (res.failureReason === 'validation_error' || res.failureReason === 'corrupt_data') {
+								new Notice(t('notice.proofreading-dict-validation-error', { error: res.errorMessage || '' }));
+							} else if (res.failureReason === 'disk_error') {
+								new Notice(t('notice.proofreading-dict-persist-error', { error: res.errorMessage || '' }));
+							} else {
+								new Notice(t('notice.proofreading-dict-network-error', { error: res.errorMessage || '' }));
+							}
+						}
+					} catch (e) {
+						new Notice(t('notice.proofreading-dict-network-error', { error: e instanceof Error ? e.message : String(e) }));
+					} finally {
+						this.display();
+					}
+				}));
+
+		// DeDiDe 规则词典与手动更新
+		const dedideSourceLabel = isDeDiDeDownloaded
+			? t('setting.proofreading-basic-dict-source-online')
+			: t('setting.proofreading-basic-dict-source-not-downloaded');
+		const dedideVersionLabel = isDeDiDeDownloaded && dedideDictInfo?.version
+			? dedideDictInfo.version
+			: '-';
+		const dedideCountLabel = String(dedideDictInfo?.count ?? 0);
+
+		const dedideDictDesc = createFragment((frag) => {
+			frag.append(t('setting.proofreading-dedide-dict-desc'));
+			frag.createEl('br');
+			frag.createSpan({
+				text: t('setting.proofreading-basic-dict-status', {
+					source: dedideSourceLabel,
+					version: dedideVersionLabel,
+					count: dedideCountLabel
+				}),
+				cls: 'text-muted'
+			});
+			if (dedideDictInfo?.isLarge) {
+				frag.createEl('br');
+				frag.createSpan({
+					text: t('setting.proofreading-basic-dict-large-advisory'),
+					cls: 'wn-settings-warning'
+				});
+			}
+		});
+
+		new Setting(containerEl)
+			.setName(t('setting.proofreading-dedide-dict'))
+			.setDesc(dedideDictDesc)
+			.addButton(btn => btn
+				.setButtonText(t('setting.btn-update-dedide-dict'))
+				.onClick(async () => {
+					if (!this.plugin.proofreadingManager) return;
+					btn.setDisabled(true);
+					btn.setButtonText(t('setting.btn-updating-basic-dict'));
+
+					try {
+						const res = await this.plugin.proofreadingManager.updateDeDiDeLexicon();
+						if (res.status === 'updated') {
+							new Notice(t('notice.proofreading-dict-updated', {
+								version: res.version || '',
+								count: String(res.count ?? 0)
+							}));
+							if (res.isLarge) {
+								new Notice(t('notice.proofreading-dict-large-warn', {
+									count: String(res.count ?? 0)
+								}));
+							}
+						} else if (res.status === 'already-current') {
+							new Notice(t('notice.proofreading-dict-already-latest', {
+								version: res.version || ''
+							}));
+						} else {
+							if (res.failureReason === 'network_error') {
+								new Notice(t('notice.proofreading-dict-network-error', { error: res.errorMessage || '' }));
+							} else if (res.failureReason === 'validation_error' || res.failureReason === 'corrupt_data') {
+								new Notice(t('notice.proofreading-dict-validation-error', { error: res.errorMessage || '' }));
+							} else if (res.failureReason === 'disk_error') {
+								new Notice(t('notice.proofreading-dict-persist-error', { error: res.errorMessage || '' }));
+							} else {
+								new Notice(t('notice.proofreading-dict-network-error', { error: res.errorMessage || '' }));
+							}
+						}
+					} catch (e) {
+						new Notice(t('notice.proofreading-dict-network-error', { error: e instanceof Error ? e.message : String(e) }));
+					} finally {
+						this.display();
+					}
+				}));
+
+		// 已忽略内容管理
+		new Setting(containerEl).setName(t('setting.proofreading-ignored-heading')).setHeading();
+
+		const wordsCount = this.plugin.proofreadingManager?.getIgnoredWordsCount() ?? 0;
+		const contextsCount = this.plugin.proofreadingManager?.getIgnoredContextsCount() ?? 0;
+
+		new Setting(containerEl)
+			.setName(t('setting.proofreading-ignored-status'))
+			.setDesc(t('setting.proofreading-ignored-status-desc', {
+				words: String(wordsCount),
+				contexts: String(contextsCount)
+			}))
+			.addButton(btn => btn
+				.setButtonText(t('setting.btn-clear-ignored'))
+				.setWarning()
+				.setDisabled(wordsCount === 0 && contextsCount === 0)
+				.onClick(async () => {
+					if (!this.plugin.proofreadingManager) return;
+					await this.plugin.proofreadingManager.clearIgnored('all');
+					new Notice(t('notice.proofreading-ignored-cleared'));
+					this.display();
+				}));
+
+		// 1. 已忽略词汇列表 (全局白名单)
+		const wordsSetting = new Setting(containerEl)
+			.setName(t('setting.proofreading-ignored-words-list'))
+			.setDesc(t('setting.proofreading-ignored-words-list-desc'));
+
+		if (wordsCount > 0) {
+			wordsSetting.addButton(btn => btn
+				.setButtonText(t('setting.btn-clear-ignored-words'))
+				.onClick(async () => {
+					if (!this.plugin.proofreadingManager) return;
+					await this.plugin.proofreadingManager.clearIgnored('words');
+					new Notice(t('notice.proofreading-ignored-words-cleared'));
+					this.display();
+				}));
+		}
+
+		const ignoredWords = this.plugin.proofreadingManager?.getIgnoredWords() ?? [];
+		if (ignoredWords.length > 0) {
+			const listContainer = containerEl.createDiv({ cls: 'wn-proofreading-ignored-list' });
+			for (const word of ignoredWords) {
+				const tag = listContainer.createSpan({ cls: 'wn-proofreading-ignored-tag' });
+				tag.createSpan({ text: word, cls: 'wn-proofreading-ignored-word-text' });
+				const removeBtn = tag.createSpan({ text: '×', cls: 'wn-proofreading-ignored-remove-btn' });
+				removeBtn.setAttribute('title', t('setting.proofreading-unignore-word-title', { word }));
+				removeBtn.setAttribute('aria-label', t('setting.proofreading-unignore-word-title', { word }));
+				removeBtn.setAttribute('role', 'button');
+				removeBtn.addEventListener('click', () => {
+					void (async () => {
+						if (!this.plugin.proofreadingManager) return;
+						await this.plugin.proofreadingManager.unignoreWord(word);
+						new Notice(t('notice.proofreading-word-unignored', { word }));
+						this.display();
+					})();
+				});
+			}
+		} else {
+			containerEl.createDiv({
+				cls: 'wn-proofreading-ignored-empty',
+				text: t('setting.proofreading-ignored-words-empty')
+			});
+		}
+
+		// 2. 已忽略特定语境列表 (具体语境实例)
+		const contextsSetting = new Setting(containerEl)
+			.setName(t('setting.proofreading-ignored-contexts-list'))
+			.setDesc(t('setting.proofreading-ignored-contexts-list-desc'));
+
+		if (contextsCount > 0) {
+			contextsSetting.addButton(btn => btn
+				.setButtonText(t('setting.btn-clear-ignored-contexts'))
+				.onClick(async () => {
+					if (!this.plugin.proofreadingManager) return;
+					await this.plugin.proofreadingManager.clearIgnored('contexts');
+					new Notice(t('notice.proofreading-ignored-contexts-cleared'));
+					this.display();
+				}));
+		}
+
+		const ignoredInstances = this.plugin.proofreadingManager?.getIgnoredInstances() ?? [];
+		if (ignoredInstances.length > 0) {
+			const filterContainer = containerEl.createDiv({ cls: 'wn-proofreading-ignored-filter-container' });
+			const contextListContainer = containerEl.createDiv({ cls: 'wn-proofreading-ignored-context-list' });
+
+			const renderContextItems = (filter: string) => {
+				contextListContainer.empty();
+				const normalizedFilter = filter.trim().toLowerCase();
+				const filtered = ignoredInstances.filter(item => {
+					if (!normalizedFilter) return true;
+					return item.original.toLowerCase().includes(normalizedFilter) ||
+						item.context.toLowerCase().includes(normalizedFilter);
+				});
+
+				if (filtered.length === 0) {
+					contextListContainer.createDiv({
+						cls: 'wn-proofreading-ignored-empty',
+						text: t('setting.proofreading-ignored-contexts-empty')
+					});
+					return;
+				}
+
+				for (const item of filtered) {
+					const itemEl = contextListContainer.createDiv({ cls: 'wn-proofreading-ignored-context-item' });
+					const mainEl = itemEl.createDiv({ cls: 'wn-proofreading-ignored-context-main' });
+
+					const parsed = formatIgnoredContextSnippet(item.context, item.original, item.ruleId);
+
+					mainEl.createSpan({
+						cls: `wn-proofreading-ignored-context-badge wn-proofreading-badge-${parsed.type}`,
+						text: this.getProofreadingTypeLabel(parsed.type)
+					});
+
+					const snippetEl = mainEl.createDiv({ cls: 'wn-proofreading-ignored-context-snippet' });
+					if (parsed.prefix) snippetEl.createSpan({ text: parsed.prefix + ' ' });
+					snippetEl.createSpan({ text: parsed.target, cls: 'wn-proofreading-ignored-context-highlight' });
+					if (parsed.suffix) snippetEl.createSpan({ text: ' ' + parsed.suffix });
+
+					const removeBtn = itemEl.createSpan({ text: '×', cls: 'wn-proofreading-ignored-remove-btn' });
+					removeBtn.setAttribute('title', t('setting.proofreading-unignore-context-title'));
+					removeBtn.setAttribute('aria-label', t('setting.proofreading-unignore-context-title'));
+					removeBtn.setAttribute('role', 'button');
+					removeBtn.addEventListener('click', () => {
+						void (async () => {
+							if (!this.plugin.proofreadingManager) return;
+							await this.plugin.proofreadingManager.unignoreInstance(item.fingerprint);
+							new Notice(t('notice.proofreading-context-unignored'));
+							this.display();
+						})();
+					});
+				}
+			};
+
+			if (ignoredInstances.length > 5) {
+				const filterInput = filterContainer.createEl('input', {
+					type: 'search',
+					placeholder: t('setting.proofreading-ignored-search-placeholder'),
+					cls: 'wn-proofreading-ignored-filter-input'
+				});
+				filterInput.addEventListener('input', () => {
+					renderContextItems(filterInput.value);
+				});
+			}
+
+			renderContextItems('');
+		} else {
+			containerEl.createDiv({
+				cls: 'wn-proofreading-ignored-empty',
+				text: t('setting.proofreading-ignored-contexts-empty')
+			});
+		}
+	}
+
+	private getProofreadingTypeLabel(type: string): string {
+		switch (type) {
+			case 'wrong_word':
+				return t('proofreading.type-wrong');
+			case 'sensitive':
+				return t('proofreading.type-sensitive');
+			case 'synonym':
+				return t('proofreading.type-synonym');
+			case 'grammar':
+				return t('proofreading.type-grammar');
+			case 'punctuation':
+				return t('proofreading.type-punctuation');
+			default:
+				return t('proofreading.type-wrong');
+		}
+	}
+
+	// ── 伏笔设置 ──
+	private displayTaskSettings(containerEl: HTMLElement): void {
+		new Setting(containerEl).setName(t('setting.task-tracking')).setHeading();
+
+		new Setting(containerEl)
+			.setName(t('setting.task-filename'))
+			.setDesc(t('setting.task-filename-desc'))
+			.addText(text => {
+				const oldName = this.plugin.settings.task?.fileName || getDefaultFileName('taskFileName');
+				text.setPlaceholder(t('common.default-task-filename'))
+					.setValue(oldName);
+				let tempValue = oldName;
+				text.onChange((value) => { tempValue = value.trim().replace(/.md$/i, ''); });
+
+				const saveAction = async () => {
+					const newName = tempValue || getDefaultFileName('taskFileName');
+					if (newName === oldName) return;
+					if (!this.plugin.settings.task) { this.plugin.settings.task = { fileName: newName }; }
+					else { this.plugin.settings.task.fileName = newName; }
+					await this.plugin.saveSettings();
+					const count = await this.plugin.renameAllFunctionalFiles(oldName, newName, 'file', 'taskFileName');
+					if (count > 0) new Notice(t('notice.files-renamed', { count: String(count) }));
+				};
+
+				text.inputEl.addEventListener('change', () => { saveAction().catch(console.error); });
+				text.inputEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); text.inputEl.blur(); } });
+			})
+
+	}
+
+	// ── 排序规则 ──
+	private displaySortingRules(containerEl: HTMLElement): void {
+		new Setting(containerEl)
+			.setName(t('setting.sorting-rules'))
+			.setHeading();
+
+		const rulesContainer = containerEl.createDiv();
+		rulesContainer.addClass('webnovel-settings-rules-container');
+
+		const renderRules = () => {
+			rulesContainer.empty();
+			this.plugin.settings.chapterNamingRules.forEach((rule, index) => {
+				const s = new Setting(rulesContainer);
+				s.settingEl.addClass('webnovel-settings-rule-item');
+
+				s.infoEl.remove();
+
+				const rules = this.plugin.settings.chapterNamingRules;
+				const orderBtns = s.settingEl.createDiv({ cls: 'wn-settings-order-btns' });
+				const upBtn = orderBtns.createEl('button', { text: '▲', attr: { title: t('setting.move-up') }, cls: 'wn-settings-order-btn' });
+				const downBtn = orderBtns.createEl('button', { text: '▼', attr: { title: t('setting.move-down') }, cls: 'wn-settings-order-btn' });
+				if (index === 0) upBtn.disabled = true;
+				if (index === rules.length - 1) downBtn.disabled = true;
+				upBtn.onclick = async () => {
+					[rules[index - 1], rules[index]] = [rules[index], rules[index - 1]];
+					await this.plugin.saveSettings();
+					ChapterSorter.setCustomRules(rules);
+					this.plugin.fileExplorerPatcher.refreshManually();
+					renderRules();
+				};
+				downBtn.onclick = async () => {
+					[rules[index + 1], rules[index]] = [rules[index], rules[index + 1]];
+					await this.plugin.saveSettings();
+					ChapterSorter.setCustomRules(this.plugin.settings.chapterNamingRules);
+					this.plugin.fileExplorerPatcher.refreshManually();
+					renderRules();
+				};
+
+				s.addToggle(chk => chk
+					.setValue(rule.enabled)
+					.onChange(async (value) => {
+						rule.enabled = value;
+						await this.plugin.saveSettings();
+						ChapterSorter.setCustomRules(this.plugin.settings.chapterNamingRules);
+						this.plugin.fileExplorerPatcher.refreshManually();
+					}));
+
+				s.addText(text => {
+					text.setValue(rule.name)
+						.setPlaceholder(t('common.rule-name-placeholder'))
+						.onChange(async (value) => {
+							rule.name = value;
+							await this.plugin.saveSettings();
+						});
+					text.inputEl.addClass('webnovel-rule-name-input');
+				});
+
+				s.addText(text => {
+					text.setValue(rule.pattern)
+						.setPlaceholder(t('common.rule-pattern-placeholder'))
+						.onChange(async (value) => {
+							// [安全] ReDoS 防护：长度限制
+							if (value.length > 200) {
+								new Notice(t('notice.regex-too-long'));
+								return;
+							}
+
+							// [安全] ReDoS 防护：禁止嵌套量词（如 (a+)+、(a*)*）
+							if (/([+*])\)?[+*]/.test(value)) {
+								new Notice(t('notice.regex-nested-quantifier'));
+								return;
+							}
+
+							// [安全] 语法校验
+							try {
+								new RegExp(value, 'i');
+							} catch {
+								new Notice(t('notice.regex-invalid'));
+								return;
+							}
+
+							rule.pattern = value;
+							await this.plugin.saveSettings();
+							ChapterSorter.setCustomRules(this.plugin.settings.chapterNamingRules);
+							this.plugin.fileExplorerPatcher.refreshManually();
+						});
+					text.inputEl.addClass('webnovel-rule-pattern-input');
+				});
+
+				s.addButton(btn => btn
+					.setButtonText(t('common.delete'))
+					.setWarning()
+					.onClick(async () => {
+						this.plugin.settings.chapterNamingRules.splice(index, 1);
+						await this.plugin.saveSettings();
+						ChapterSorter.setCustomRules(this.plugin.settings.chapterNamingRules);
+						this.plugin.fileExplorerPatcher.refreshManually();
+						renderRules();
+					}));
+			});
+
+			const addBtnRow = new Setting(rulesContainer);
+			addBtnRow.infoEl.remove();
+			addBtnRow.settingEl.addClass('webnovel-add-btn-row');
+			addBtnRow.addButton(btn => btn
+				.setButtonText(t('common.add-new-rule'))
+				.onClick(async () => {
+					this.plugin.settings.chapterNamingRules.push({ name: t('common.new-rule'), pattern: '^(\\d+)', enabled: true });
+					await this.plugin.saveSettings();
+					renderRules();
+				}).buttonEl.addClass('webnovel-settings-btn-full'));
+		};
+		renderRules();
+	}
+
+	private refreshOpenEditors(): void {
+		const leaves = this.app.workspace.getLeavesOfType('markdown');
+		for (const leaf of leaves) {
+			const view = leaf.view;
+			if (view instanceof MarkdownView && view.editor) {
+				const cm = (view.editor as unknown as { cm?: { dispatch: (tr: Record<string, unknown>) => void } }).cm;
+				if (cm && typeof cm.dispatch === 'function') {
+					cm.dispatch({});
+				}
+			}
+		}
+	}
+
+	// ── 普通编辑打字机设置 ──
+	private displayEditorTypewriterSettings(containerEl: HTMLElement): void {
+		new Setting(containerEl).setName(t('setting.editor-typewriter-title')).setHeading();
+
+		new Setting(containerEl)
+			.setName(t('setting.editor-typewriter-enable'))
+			.setDesc(t('setting.editor-typewriter-enable-desc'))
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.editorTypewriter?.enabled ?? false)
+				.onChange(async (value) => {
+					if (!this.plugin.settings.editorTypewriter) {
+						this.plugin.settings.editorTypewriter = {
+							enabled: false,
+							centerOffset: 0,
+							unfocusedOpacity: 0.4
+						};
+					}
+					this.plugin.settings.editorTypewriter.enabled = value;
+					await this.plugin.saveSettings();
+					this.refreshOpenEditors();
+				}));
+
+		new Setting(containerEl)
+			.setName(t('setting.editor-typewriter-offset'))
+			.setDesc(t('setting.editor-typewriter-offset-desc'))
+			.addSlider(slider => slider
+				.setLimits(-30, 30, 1)
+				.setValue(this.plugin.settings.editorTypewriter?.centerOffset ?? 0)
+				.setDynamicTooltip()
+				.onChange(async (value) => {
+					if (!this.plugin.settings.editorTypewriter) {
+						this.plugin.settings.editorTypewriter = {
+							enabled: false,
+							centerOffset: 0,
+							unfocusedOpacity: 0.4
+						};
+					}
+					this.plugin.settings.editorTypewriter.centerOffset = value;
+					await this.plugin.saveSettings();
+					this.refreshOpenEditors();
+				}));
+
+		new Setting(containerEl)
+			.setName(t('setting.editor-typewriter-opacity'))
+			.setDesc(t('setting.editor-typewriter-opacity-desc'))
+			.addSlider(slider => slider
+				.setLimits(0.1, 1.0, 0.05)
+				.setValue(this.plugin.settings.editorTypewriter?.unfocusedOpacity ?? 0.4)
+				.setDynamicTooltip()
+				.onChange(async (value) => {
+					if (!this.plugin.settings.editorTypewriter) {
+						this.plugin.settings.editorTypewriter = {
+							enabled: false,
+							centerOffset: 0,
+							unfocusedOpacity: 0.4
+						};
+					}
+					this.plugin.settings.editorTypewriter.unfocusedOpacity = value;
+					await this.plugin.saveSettings();
+					this.refreshOpenEditors();
+				}));
+	}
+
+	// ── 悬浮便签设置 ──
+	private displayStickyNoteSettings(containerEl: HTMLElement): void {
+		new Setting(containerEl).setName(t('setting.sticky-notes')).setHeading();
+
+		if (isDesktop()) {
+			new Setting(containerEl)
+				.setName(t('setting.idle-opacity'))
+				.addSlider(slider => slider.setLimits(0.1, 1, 0.05).setValue(this.plugin.settings.noteOpacity).onChange(async (v) => {
+					this.plugin.settings.noteOpacity = v; await this.plugin.saveSettings();
+					this.plugin.activeNotes.forEach((n: FloatingStickyNote) => n.updateVisuals());
+				}));
+		}
+
+		new Setting(containerEl)
+			.setName(t('setting.sticky-note-autosave'))
+			.setDesc(t('setting.sticky-note-autosave-desc'))
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.stickyNoteAutoSave)
+				.onChange(async (value) => {
+					this.plugin.settings.stickyNoteAutoSave = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName(t('setting.sticky-note-list-font-size'))
+			.setDesc(t('setting.sticky-note-list-font-size-desc'))
+			.addSlider(slider => slider
+				.setLimits(10, 30, 1)
+				.setValue(this.plugin.settings.immersive.immersiveNoteFontSize || 14)
+				.setDynamicTooltip()
+				.onChange(async (value) => {
+					this.plugin.settings.immersive.immersiveNoteFontSize = value;
+					await this.plugin.saveSettings();
+					this.plugin.stickyNoteManager.refreshImmersiveNotes();
+				}));
+
+		const colorSetting = new Setting(containerEl).setName(t('setting.theme-colors')).setDesc(t('setting.theme-colors-desc'));
+		const colorContainer = colorSetting.controlEl.createDiv({ cls: 'wn-settings-color-grid' });
+		this.plugin.settings.noteThemes.forEach((theme: ThemeScheme, index: number) => {
+			const themeDiv = colorContainer.createDiv({ cls: 'wn-settings-color-item' });
+			const bg = themeDiv.createEl('input', { type: 'color', value: theme.bg });
+			const txt = themeDiv.createEl('input', { type: 'color', value: theme.text });
+			bg.onchange = async (e) => { this.plugin.settings.noteThemes[index].bg = (e.target as HTMLInputElement).value; await this.plugin.saveSettings(); };
+			txt.onchange = async (e) => { this.plugin.settings.noteThemes[index].text = (e.target as HTMLInputElement).value; await this.plugin.saveSettings(); };
+		});
+	}
+
+	// ── 沉浸模式设置 ──
+	private displayImmersiveLayoutBuilder(containerEl: HTMLElement): void {
+		new Setting(containerEl)
+			.setName(t('setting.immersive-layout-builder'))
+			.setDesc(t('setting.immersive-layout-builder-desc'))
+			.setHeading();
+
+		const builderContainer = containerEl.createDiv('wn-layout-builder-container');
+		this.renderLayoutBuilder(builderContainer);
+	}
+
+	private getAvailableViews(): Record<string, string> {
+		return {
+			'immersive-chapter-list-view': t('setting.layout-view-chapter-list'),
+			'webnovel-corkboard': t('setting.layout-view-corkboard'),
+			'webnovel-lore-overview': t('setting.layout-view-lore-overview'),
+			'immersive-sticky-notes-view': t('setting.layout-view-sticky-notes'),
+			'foreshadowing-view': t('setting.layout-view-foreshadowing'),
+			'wn-timeline-view': t('setting.layout-view-timeline'),
+			'reference-view': t('setting.layout-view-reference'),
+			'outline': t('setting.layout-view-outline')
+		};
+	}
+
+	private getViewName(id: string): string {
+		return this.getAvailableViews()[id] || id;
+	}
+
+	private renderLayoutBuilder(container: HTMLElement): void {
+		container.empty();
+		const immersive = this.plugin.settings.immersive;
+
+		const createSlotEditor = (parent: HTMLElement, title: string, key: 'immersiveTopSlots' | 'immersiveBottomSlots' | 'immersiveLeftSlots' | 'immersiveRightSlots') => {
+			const wrapper = parent.createDiv('wn-slot-editor');
+			wrapper.createEl('strong', { text: title, cls: 'wn-slot-title' });
+
+			const list = wrapper.createDiv('wn-slot-list');
+			const slots = immersive[key] || [];
+
+			if (slots.length === 0) {
+				list.createSpan({ text: t('setting.layout-empty'), cls: 'wn-slot-empty' });
+			}
+
+			for (let i = 0; i < slots.length; i++) {
+				const item = list.createDiv('wn-slot-item');
+				item.createSpan({ text: this.getViewName(slots[i]) });
+				const delBtn = item.createEl('button', { text: '✕', cls: 'wn-slot-del' });
+				delBtn.onclick = async () => {
+					slots.splice(i, 1);
+					await this.plugin.saveSettings();
+					this.renderLayoutBuilder(container);
+				};
+			}
+
+			const select = wrapper.createEl('select', { cls: 'dropdown' });
+			select.createEl('option', { text: t('setting.layout-add-component'), value: '' });
+			for (const [id, name] of Object.entries(this.getAvailableViews())) {
+				select.createEl('option', { text: name, value: id });
+			}
+			select.onchange = async () => {
+				if (select.value) {
+					if (!immersive[key]) immersive[key] = [];
+					immersive[key].push(select.value);
+					await this.plugin.saveSettings();
+					this.renderLayoutBuilder(container);
+				}
+			};
+		};
+
+		const grid = container.createDiv('wn-layout-grid');
+
+		const topArea = grid.createDiv('wn-layout-top');
+		createSlotEditor(topArea, t('setting.layout-top'), 'immersiveTopSlots');
+
+		const middleArea = grid.createDiv('wn-layout-middle');
+
+		const leftArea = middleArea.createDiv('wn-layout-left');
+		createSlotEditor(leftArea, t('setting.layout-left'), 'immersiveLeftSlots');
+
+		const centerArea = middleArea.createDiv('wn-layout-center');
+		centerArea.createDiv({ text: t('setting.layout-center'), cls: 'wn-layout-center-text' });
+
+		const rightArea = middleArea.createDiv('wn-layout-right');
+		createSlotEditor(rightArea, t('setting.layout-right'), 'immersiveRightSlots');
+
+		const bottomArea = grid.createDiv('wn-layout-bottom');
+		createSlotEditor(bottomArea, t('setting.layout-bottom'), 'immersiveBottomSlots');
+	}
+
+	private displayImmersiveModeSettings(containerEl: HTMLElement): void {
+		this.displayImmersiveLayoutBuilder(containerEl);
+
+		new Setting(containerEl)
+			.setName(t('setting.immersive-hide-properties'))
+			.setDesc(t('setting.immersive-hide-properties-desc'))
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.immersive.immersiveHideProperties)
+				.onChange(async (value) => {
+					this.plugin.settings.immersive.immersiveHideProperties = value;
+					await this.plugin.saveSettings();
+
+					// 如果当前处于沉浸模式则立即生效
+					if (activeDocument.body.classList.contains('immersive-mode-active')) {
+						if (value) activeDocument.body.classList.add('immersive-hide-properties');
+						else activeDocument.body.classList.remove('immersive-hide-properties');
+					}
+				}));
+
+		new Setting(containerEl).setName(t('setting.immersive-typewriter-title')).setHeading();
+
+		new Setting(containerEl)
+			.setName(t('setting.immersive-typewriter-enable'))
+			.setDesc(t('setting.immersive-typewriter-enable-desc'))
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.immersive.typewriterEnabled)
+				.onChange(async (value) => {
+					this.plugin.settings.immersive.typewriterEnabled = value;
+					await this.plugin.saveSettings();
+
+					if (activeDocument.body.classList.contains('immersive-mode-active')) {
+						if (value) {
+							activeDocument.body.classList.add('wn-typewriter-active');
+							activeDocument.body.setCssProps({ '--wn-typewriter-opacity': String(this.plugin.settings.immersive.typewriterUnfocusedOpacity ?? 0.4) });
+						} else {
+							activeDocument.body.classList.remove('wn-typewriter-active');
+						}
+					}
+					this.refreshOpenEditors();
+				}));
+
+		new Setting(containerEl)
+			.setName(t('setting.immersive-typewriter-offset'))
+			.setDesc(t('setting.immersive-typewriter-offset-desc'))
+			.addSlider(slider => slider
+				.setLimits(-30, 30, 1)
+				.setValue(this.plugin.settings.immersive.typewriterCenterOffset ?? 0)
+				.setDynamicTooltip()
+				.onChange(async (value) => {
+					this.plugin.settings.immersive.typewriterCenterOffset = value;
+					await this.plugin.saveSettings();
+					this.refreshOpenEditors();
+				}));
+
+		new Setting(containerEl)
+			.setName(t('setting.immersive-typewriter-opacity'))
+			.setDesc(t('setting.immersive-typewriter-opacity-desc'))
+			.addSlider(slider => slider
+				.setLimits(0.1, 1.0, 0.05)
+				.setValue(this.plugin.settings.immersive.typewriterUnfocusedOpacity ?? 0.4)
+				.setDynamicTooltip()
+				.onChange(async (value) => {
+					this.plugin.settings.immersive.typewriterUnfocusedOpacity = value;
+					await this.plugin.saveSettings();
+
+					if (activeDocument.body.classList.contains('immersive-mode-active')) {
+						activeDocument.body.setCssProps({ '--wn-typewriter-opacity': String(value) });
+					}
+					this.refreshOpenEditors();
+				}));
+
+		new Setting(containerEl).setName(t('setting.immersive-dashboard-toggles')).setHeading();
+
+		new Setting(containerEl)
+			.setName(t('setting.show-total-time'))
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.immersive.immersiveShowTotalTime)
+				.onChange(async (value) => {
+					this.plugin.settings.immersive.immersiveShowTotalTime = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName(t('setting.show-focus-time'))
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.immersive.immersiveShowFocusTime)
+				.onChange(async (value) => {
+					this.plugin.settings.immersive.immersiveShowFocusTime = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName(t('setting.show-slack-time'))
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.immersive.immersiveShowSlackTime)
+				.onChange(async (value) => {
+					this.plugin.settings.immersive.immersiveShowSlackTime = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName(t('setting.show-chapter-progress'))
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.immersive.immersiveShowChapterProgress)
+				.onChange(async (value) => {
+					this.plugin.settings.immersive.immersiveShowChapterProgress = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName(t('setting.show-daily-progress'))
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.immersive.immersiveShowDailyProgress)
+				.onChange(async (value) => {
+					this.plugin.settings.immersive.immersiveShowDailyProgress = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName(t('setting.show-task-progress'))
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.immersive.immersiveShowTaskProgress)
+				.onChange(async (value) => {
+					this.plugin.settings.immersive.immersiveShowTaskProgress = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName(t('setting.show-session-words'))
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.immersive.immersiveShowSessionWords)
+				.onChange(async (value) => {
+					this.plugin.settings.immersive.immersiveShowSessionWords = value;
+					await this.plugin.saveSettings();
+				}));
+	}
+
+	// ── 伏笔标注设置 ──
+	private displayForeshadowingSettings(containerEl: HTMLElement): void {
+		new Setting(containerEl).setName(t('setting.foreshadowing')).setHeading();
+
+		new Setting(containerEl)
+			.setName(t('setting.foreshadowing-filename'))
+			.setDesc(t('setting.foreshadowing-filename-desc'))
+			.addText(text => {
+				const oldName = this.plugin.settings.foreshadowing?.fileName || getDefaultFileName('foreshadowingFileName');
+				text.setPlaceholder(t('common.default-foreshadowing-filename'))
+					.setValue(oldName);
+				let tempValue = oldName;
+				text.onChange((value) => { tempValue = value.trim().replace(/.md$/i, ''); });
+
+				const saveAction = async () => {
+					const newName = tempValue || getDefaultFileName('foreshadowingFileName');
+					if (newName === oldName) return;
+					if (!this.plugin.settings.foreshadowing) { this.plugin.settings.foreshadowing = { fileName: newName, showTimestamp: true, defaultTags: [] }; }
+					else { this.plugin.settings.foreshadowing.fileName = newName; }
+					await this.plugin.saveSettings();
+					const count = await this.plugin.renameAllFunctionalFiles(oldName, newName, 'file', 'foreshadowingFileName');
+					if (count > 0) new Notice(t('notice.files-renamed', { count: String(count) }));
+				};
+
+				text.inputEl.addEventListener('change', () => { saveAction().catch(console.error); });
+				text.inputEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); text.inputEl.blur(); } });
+			})
+
+
+
+		new Setting(containerEl)
+			.setName(t('setting.common-tags'))
+			.setDesc(t('setting.common-tags-desc'))
+			.addText(text => {
+				const tags = this.plugin.settings.foreshadowing?.defaultTags || [];
+				text
+					.setPlaceholder(t('common.foreshadowing-tags-default'))
+					.setValue(tags.join(', '))
+					.onChange(async (value) => {
+						if (!this.plugin.settings.foreshadowing) {
+							this.plugin.settings.foreshadowing = { fileName: getDefaultFileName('foreshadowingFileName'), showTimestamp: true, defaultTags: [] };
+						}
+						this.plugin.settings.foreshadowing.defaultTags = value.trim()
+							? value.trim().split(/[,，\s]+/).filter(Boolean)
+							: [];
+						await this.plugin.saveSettings();
+					});
+				text.inputEl.addClass('webnovel-settings-input-full');
+			});
+	}
+
+	// ── 设定速查设置 ──
+	private displayLoreSettings(containerEl: HTMLElement): void {
+		new Setting(containerEl).setName(t('setting.lore-lookup')).setHeading();
+
+		const desc = createFragment((frag) => {
+			frag.append(
+				t('setting.lore-folder-name-desc-prefix'),
+				frag.createEl('br'),
+				frag.createEl('strong', { text: t('setting.lore-folder-name-desc-hint') }),
+				t('setting.lore-folder-name-desc')
+			);
+		});
+
+		new Setting(containerEl)
+			.setName(t('setting.lore-folder-name'))
+			.setDesc(desc)
+			.addText(text => {
+				const oldName = this.plugin.settings.loreFolderName || getDefaultFileName('loreFolderName');
+				text.setPlaceholder(t('setting.lore-folder-name-placeholder'))
+					.setValue(oldName);
+				let tempValue = oldName;
+				text.onChange((value: string) => { tempValue = value.trim(); });
+
+				const saveAction = async () => {
+					const newName = tempValue || getDefaultFileName('loreFolderName');
+					if (newName === oldName) return;
+					this.plugin.settings.loreFolderName = newName;
+					await this.plugin.saveSettings();
+					this.plugin.cacheManager?.resetLoreCache();
+					const count = await this.plugin.renameAllFunctionalFiles(oldName, newName, 'folder', 'loreFolderName');
+					if (count > 0) new Notice(t('notice.files-renamed', { count: String(count) }));
+				};
+
+				text.inputEl.addEventListener('change', () => { saveAction().catch(console.error); });
+				text.inputEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); text.inputEl.blur(); } });
+			})
+
+		// 移动端开启设定悬浮/点击卡片开关（仅在移动端显示，电脑端屏蔽）
+		if (isMobile()) {
+			new Setting(containerEl)
+				.setName(t('setting.enable-mobile-lore-popover'))
+				.setDesc(t('setting.enable-mobile-lore-popover-desc'))
+				.addToggle(toggle => toggle
+					.setValue(this.plugin.settings.enableMobileLorePopover)
+					.onChange(async (value: boolean) => {
+						this.plugin.settings.enableMobileLorePopover = value;
+						await this.plugin.saveSettings();
+					}));
+		}
+
+		// 设定卡片子标题折叠开关（全平台生效）
+		new Setting(containerEl)
+			.setName(t('setting.lore-popover-collapse'))
+			.setDesc(t('setting.lore-popover-collapse-desc'))
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.lorePopoverCollapse)
+				.onChange(async (value: boolean) => {
+					this.plugin.settings.lorePopoverCollapse = value;
+					await this.plugin.saveSettings();
+				}));
+
+		// 设定图谱是否自动关联提及的设定
+		new Setting(containerEl)
+			.setName(t('setting.lore-graph-auto-link-mentions'))
+			.setDesc(t('setting.lore-graph-auto-link-mentions-desc'))
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.loreGraphAutoLinkMentions)
+				.onChange(async (value: boolean) => {
+					this.plugin.settings.loreGraphAutoLinkMentions = value;
+					await this.plugin.saveSettings();
+				}));
+
+		// 启用跨文件图谱关联
+		new Setting(containerEl)
+			.setName(t('setting.lore-graph-enable-global'))
+			.setDesc(t('setting.lore-graph-enable-global-desc'))
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.loreGraphEnableGlobal)
+				.onChange(async (value: boolean) => {
+					this.plugin.settings.loreGraphEnableGlobal = value;
+					await this.plugin.saveSettings();
+				}));
+	}
+
+	// ── 时间线设置 ──
+	private displayTimelineSettings(containerEl: HTMLElement): void {
+		new Setting(containerEl).setName(t('setting.timeline')).setHeading();
+
+		new Setting(containerEl)
+			.setName(t('setting.timeline-filename'))
+			.setDesc(t('setting.timeline-filename-desc'))
+			.addText(text => {
+				const oldName = this.plugin.settings.timeline?.fileName || getDefaultFileName('timelineFileName');
+				text.setPlaceholder(t('common.default-timeline-filename'))
+					.setValue(oldName);
+				let tempValue = oldName;
+				text.onChange((value) => { tempValue = value.trim().replace(/.md$/i, ''); });
+
+				const saveAction = async () => {
+					const newName = tempValue || getDefaultFileName('timelineFileName');
+					if (newName === oldName) return;
+					if (!this.plugin.settings.timeline) { this.plugin.settings.timeline = { fileName: newName, defaultTypes: [] }; }
+					else { this.plugin.settings.timeline.fileName = newName; }
+					await this.plugin.saveSettings();
+					const count = await this.plugin.renameAllFunctionalFiles(oldName, newName, 'file', 'timelineFileName');
+					if (count > 0) new Notice(t('notice.files-renamed', { count: String(count) }));
+				};
+
+				text.inputEl.addEventListener('change', () => { saveAction().catch(console.error); });
+				text.inputEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); text.inputEl.blur(); } });
+			})
+
+		new Setting(containerEl)
+			.setName(t('setting.timeline-default-types'))
+			.setDesc(t('setting.timeline-default-types-desc'))
+			.addText(text => {
+				const types = this.plugin.settings.timeline?.defaultTypes || [];
+				text
+					.setPlaceholder(t('common.timeline-types-default'))
+					.setValue(types.join(', '))
+					.onChange(async (value) => {
+						if (!this.plugin.settings.timeline) {
+							this.plugin.settings.timeline = { fileName: getDefaultFileName('timelineFileName'), defaultTypes: [] };
+						}
+						this.plugin.settings.timeline.defaultTypes = value.trim()
+							? value.trim().split(/[,，\s]+/).filter(Boolean)
+							: [];
+						await this.plugin.saveSettings();
+					});
+				text.inputEl.addClass('webnovel-settings-input-full');
+			});
+	}
+
+	// ── 数据输出设置 ──
+	private displayDataSettings(containerEl: HTMLElement): void {
+		new Setting(containerEl).setName(t('setting.history-backup')).setHeading();
+
+		new Setting(containerEl)
+			.setName(t('setting.history-backup-actions'))
+			.setDesc(t('setting.history-backup-actions-desc'))
+			.addButton(button => button
+				.setButtonText(t('setting.history-export-button'))
+				.onClick(() => this.exportHistoryData(containerEl.ownerDocument)))
+			.addButton(button => button
+				.setButtonText(t('setting.history-restore-button'))
+				.onClick(() => this.openHistoryRestorePicker(containerEl.ownerDocument)));
+
+		new Setting(containerEl).setName(t('setting.focus-judgment')).setHeading();
+
+		new Setting(containerEl)
+			.setName(t('setting.idle-threshold'))
+			.setDesc(t('setting.idle-threshold-desc'))
+			.addSlider(slider => slider
+				.setLimits(30, 600, 30)
+				.setValue(this.plugin.settings.idleTimeoutThreshold / 1000)
+				.setDynamicTooltip()
+				.onChange(async (value) => {
+					this.plugin.settings.idleTimeoutThreshold = value * 1000;
+					await this.plugin.saveSettings();
+				}));
+
+		this.displayObsSettings(containerEl);
+	}
+
+	private exportHistoryData(ownerDocument: Document): void {
+		try {
+			const content = this.plugin.historyManager.createHistoryBackup();
+			const blob = new Blob([content], { type: 'application/json' });
+			const objectUrl = URL.createObjectURL(blob);
+			const anchor = ownerDocument.body.createEl('a');
+			anchor.href = objectUrl;
+			anchor.download = `webnovel-assistant-history-${new Date().toISOString().slice(0, 10)}.json`;
+			anchor.click();
+			anchor.remove();
+			ownerDocument.win.setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
+			new Notice(t('notice.history-export-success'));
+		} catch (error) {
+			Logger.error('[SettingsTab] 导出历史数据失败:', error);
+			new Notice(t('notice.history-export-failed'));
+		}
+	}
+
+	private openHistoryRestorePicker(ownerDocument: Document): void {
+		const input = ownerDocument.body.createEl('input');
+		input.type = 'file';
+		input.accept = '.json,application/json';
+		input.hidden = true;
+		input.addEventListener('change', () => {
+			const file = input.files?.[0];
+			input.remove();
+			if (!file) return;
+			void file.text().then(content => {
+				new HistoryRestoreConfirmModal(this.app, async () => {
+					const count = await this.plugin.historyManager.restoreHistoryBackup(content);
+					this.plugin.refreshStatusViews(true);
+					new Notice(t('notice.history-restore-success', { count: String(count) }));
+				}).open();
+			}).catch(error => {
+				Logger.error('[SettingsTab] 读取历史数据备份失败:', error);
+				new Notice(t('notice.history-restore-failed'));
+			});
+		}, { once: true });
+		input.addEventListener('cancel', () => input.remove(), { once: true });
+		input.click();
+	}
+
+	private displayObsSettings(containerEl: HTMLElement): void {
+		new Setting(containerEl).setName(t('setting.obs-overlay')).setHeading();
+
+		new Setting(containerEl)
+			.setName(t('setting.enable-obs-overlay'))
+			.setDesc(t('setting.enable-obs-overlay-desc'))
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.obs.enableObs)
+				.onChange(async (value) => {
+					this.plugin.settings.obs.enableObs = value;
+					await this.plugin.saveSettings();
+					if (value) {
+						if (this.plugin.obsServer) {
+							await this.plugin.obsServer.stop();
+						}
+						this.plugin.obsServer = new ObsOverlayServer(this.plugin, this.plugin.settings.obs.obsPort);
+						this.plugin.obsServer.start();
+					} else {
+						await this.plugin.obsServer?.stop();
+						this.plugin.obsServer = null;
+					}
+				}));
+
+		new Setting(containerEl)
+			.setName(t('setting.overlay-port'))
+			.setDesc(t('setting.overlay-port-desc'))
+			.addText(text => text
+				.setValue(this.plugin.settings.obs.obsPort.toString())
+				.onChange(async (value) => {
+					const parsed = parseInt(value, 10);
+					if (parsed >= VALIDATION_RULES.PORT_RANGE.min &&
+						parsed <= VALIDATION_RULES.PORT_RANGE.max) {
+						this.plugin.settings.obs.obsPort = parsed;
+						await this.plugin.saveSettings();
+
+						if (this.plugin.settings.obs.enableObs && this.plugin.obsServer) {
+							await this.plugin.obsServer.stop();
+							this.plugin.obsServer = new ObsOverlayServer(this.plugin, this.plugin.settings.obs.obsPort);
+							this.plugin.obsServer.start();
+							new Notice(t('notice.obs-overlay-restarted', { port: String(parsed) }));
+						}
+					} else if (!isNaN(parsed)) {
+						new Notice(t('notice.port-range-invalid', { min: String(VALIDATION_RULES.PORT_RANGE.min), max: String(VALIDATION_RULES.PORT_RANGE.max) }));
+					}
+				}));
+
+		new Setting(containerEl)
+			.setName(t('setting.overlay-opacity'))
+			.setDesc(t('setting.overlay-opacity-desc'))
+			.addSlider(slider => slider
+				.setLimits(0, 1, 0.05)
+				.setValue(this.plugin.settings.obs.obsOverlayOpacity ?? 0.85)
+				.setDynamicTooltip()
+				.onChange(async (value) => {
+					this.plugin.settings.obs.obsOverlayOpacity = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName(t('setting.custom-css'))
+			.setDesc(t('setting.custom-css-desc'))
+			.addTextArea(text => {
+				text.setPlaceholder(t('common.custom-css-placeholder'))
+					.setValue(this.plugin.settings.obs.obsCustomCss)
+					.onChange(async (value) => {
+						this.plugin.settings.obs.obsCustomCss = value;
+						await this.plugin.saveSettings();
+					});
+				text.inputEl.addClass('webnovel-obs-css-input');
+				return text;
+			});
+
+		new Setting(containerEl)
+			.setName(t('setting.overlay-theme'))
+			.addDropdown(dropdown => {
+				dropdown.addOption('dark', t('setting.theme-dark'));
+				dropdown.addOption('light', t('setting.theme-light'));
+				this.plugin.settings.noteThemes.forEach((theme: ThemeScheme, index: number) => {
+					dropdown.addOption(`note-${index}`, t('setting.theme-note-preset', { index: String(index + 1) }));
+				});
+				dropdown.setValue(this.plugin.settings.obs.obsOverlayTheme);
+				dropdown.onChange(async (value) => {
+					this.plugin.settings.obs.obsOverlayTheme = value;
+					await this.plugin.saveSettings();
+				});
+			});
+
+		new Setting(containerEl)
+			.setName(t('obs.total-time'))
+			.addToggle(toggle => toggle.setValue(this.plugin.settings.obs.obsShowTotalTime).onChange(async (v) => {
+				this.plugin.settings.obs.obsShowTotalTime = v;
+				await this.plugin.saveSettings();
+			}));
+
+		new Setting(containerEl)
+			.setName(t('obs.focus-time'))
+			.addToggle(toggle => toggle.setValue(this.plugin.settings.obs.obsShowFocusTime).onChange(async (v) => {
+				this.plugin.settings.obs.obsShowFocusTime = v;
+				await this.plugin.saveSettings();
+			}));
+
+		new Setting(containerEl)
+			.setName(t('obs.slack-time'))
+			.addToggle(toggle => toggle.setValue(this.plugin.settings.obs.obsShowSlackTime).onChange(async (v) => {
+				this.plugin.settings.obs.obsShowSlackTime = v;
+				await this.plugin.saveSettings();
+			}));
+
+		new Setting(containerEl)
+			.setName(t('obs.daily-goal'))
+			.addToggle(toggle => toggle.setValue(this.plugin.settings.obs.obsShowDailyGoal ?? true).onChange(async (v) => {
+				this.plugin.settings.obs.obsShowDailyGoal = v;
+				await this.plugin.saveSettings();
+			}));
+
+		new Setting(containerEl)
+			.setName(t('obs.chapter-goal'))
+			.addToggle(toggle => toggle.setValue(this.plugin.settings.obs.obsShowTodayWords).onChange(async (v) => {
+				this.plugin.settings.obs.obsShowTodayWords = v;
+				await this.plugin.saveSettings();
+			}));
+
+		new Setting(containerEl)
+			.setName(t('obs.session-words'))
+			.addToggle(toggle => toggle.setValue(this.plugin.settings.obs.obsShowSessionWords).onChange(async (v) => {
+				this.plugin.settings.obs.obsShowSessionWords = v;
+				await this.plugin.saveSettings();
+			}));
+
+		new Setting(containerEl)
+			.setName(t('setting.copy-obs-url'))
+			.setDesc(t('setting.copy-obs-url-desc'))
+			.addButton(btn => btn
+				.setButtonText(t('setting.btn-copy-url'))
+				.onClick(() => {
+					const url = `http://127.0.0.1:${this.plugin.settings.obs.obsPort}/`;
+					void navigator.clipboard.writeText(url);
+					new Notice(t('notice.obs-url-copied', { url }));
+				}));
+
+		// 调试模式
+		new Setting(containerEl)
+			.setName(t('setting.debug-mode'))
+			.setDesc(t('setting.debug-mode-desc'))
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.debugMode ?? false)
+				.onChange(async (value) => {
+					if (!value) {
+						Logger.info('[WebNovel Assistant] Debug mode disabled');
+					}
+					this.plugin.settings.debugMode = value;
+					if (value) {
+						Logger.info('[WebNovel Assistant] Debug mode enabled');
+					}
+					await this.plugin.saveSettings();
+				}));
+	}
+
+	// ── 排版设置 ──
+	private displayTypographySettings(containerEl: HTMLElement): void {
+		// 1. 护眼模式
+		new Setting(containerEl).setName(t('setting.eyecare-mode')).setHeading();
+
+		new Setting(containerEl)
+			.setName(t('setting.enable-eyecare'))
+			.setDesc(t('setting.enable-eyecare-desc'))
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.eyeCareEnabled ?? false)
+				.onChange(async (value) => {
+					this.plugin.settings.eyeCareEnabled = value;
+					await this.plugin.saveSettings();
+					if (value) {
+						this.plugin.applyEyeCare();
+					} else {
+						this.plugin.removeEyeCare();
+					}
+				}));
+
+		new Setting(containerEl)
+			.setName(t('setting.eyecare-bg-color'))
+			.setDesc(t('setting.eyecare-bg-color-desc'))
+			.addColorPicker(picker => picker
+				.setValue(this.plugin.settings.eyeCareColor || '#E8F5E9')
+				.onChange(async (value) => {
+					this.plugin.settings.eyeCareColor = value;
+					await this.plugin.saveSettings();
+					if (this.plugin.settings.eyeCareEnabled) {
+						this.plugin.applyEyeCare();
+					}
+				}))
+			.addExtraButton(btn => btn
+				.setIcon('reset')
+				.setTooltip(t('setting.eyecare-reset-tooltip'))
+				.onClick(async () => {
+					this.plugin.settings.eyeCareColor = '#E8F5E9';
+					await this.plugin.saveSettings();
+					if (this.plugin.settings.eyeCareEnabled) {
+						this.plugin.applyEyeCare();
+					}
+					this.display();
+				}));
+
+		// 2. 排版系统开关与作用域
+		new Setting(containerEl).setName(t('setting.tab-typography')).setHeading();
+
+		const typo = this.plugin.settings.typography;
+
+		new Setting(containerEl)
+			.setName(t('setting.typography-master-toggle'))
+			.setDesc(t('setting.typography-master-toggle-desc'))
+			.addToggle(toggle => toggle
+				.setValue(typo.enabled)
+				.onChange(async (value) => {
+					typo.enabled = value;
+					await this.plugin.saveSettings();
+					this.plugin.typographyManager.updateTypography(true);
+					this.display();
+				}));
+
+		if (!typo.enabled) return;
+
+		new Setting(containerEl).setName(t('setting.typography-scope-heading')).setHeading();
+
+		new Setting(containerEl)
+			.setName(t('setting.typography-enable-global'))
+			.setDesc(t('setting.typography-enable-global-desc'))
+			.addToggle(toggle => toggle
+				.setValue(typo.enableGlobal ?? false)
+				.onChange(async (value) => {
+					typo.enableGlobal = value;
+					await this.plugin.saveSettings();
+					this.plugin.typographyManager.updateTypography(true);
+					this.display();
+				}));
+
+		new Setting(containerEl)
+			.setName(t('setting.typography-apply-chapters'))
+			.setDesc(t('setting.typography-apply-chapters-desc'))
+			.addToggle(toggle => toggle
+				.setValue(typo.applyToChapters)
+				.setDisabled(typo.enableGlobal ?? false)
+				.onChange(async (value) => {
+					typo.applyToChapters = value;
+					await this.plugin.saveSettings();
+					this.plugin.typographyManager.updateTypography(true);
+				}));
+
+		new Setting(containerEl)
+			.setName(t('setting.typography-apply-other'))
+			.setDesc(t('setting.typography-apply-other-desc'))
+			.addToggle(toggle => toggle
+				.setValue(typo.applyToOther ?? false)
+				.setDisabled(typo.enableGlobal ?? false)
+				.onChange(async (value) => {
+					typo.applyToOther = value;
+					await this.plugin.saveSettings();
+					this.plugin.typographyManager.updateTypography(true);
+				}));
+
+		new Setting(containerEl)
+			.setName(t('setting.typography-apply-cards'))
+			.setDesc(t('setting.typography-apply-cards-desc'))
+			.addToggle(toggle => toggle
+				.setValue(typo.applyToCards ?? false)
+				.onChange(async (value) => {
+					typo.applyToCards = value;
+					await this.plugin.saveSettings();
+					this.plugin.typographyManager.updateTypography();
+				}));
+
+		new Setting(containerEl)
+			.setName(t('setting.typography-scope-functional'))
+			.setDesc(t('setting.typography-scope-functional-desc'));
+
+		new Setting(containerEl)
+			.setName(t('setting.typography-apply-lore'))
+			.addToggle(toggle => toggle
+				.setValue(typo.applyToLore)
+				.onChange(async (value) => {
+					typo.applyToLore = value;
+					await this.plugin.saveSettings();
+					this.plugin.typographyManager.updateTypography(true);
+				}));
+
+		new Setting(containerEl)
+			.setName(t('setting.typography-apply-novel-info'))
+			.addToggle(toggle => toggle
+				.setValue(typo.applyToNovelInfo)
+				.onChange(async (value) => {
+					typo.applyToNovelInfo = value;
+					await this.plugin.saveSettings();
+					this.plugin.typographyManager.updateTypography(true);
+				}));
+
+		new Setting(containerEl)
+			.setName(t('setting.typography-apply-timeline'))
+			.addToggle(toggle => toggle
+				.setValue(typo.applyToTimeline)
+				.onChange(async (value) => {
+					typo.applyToTimeline = value;
+					await this.plugin.saveSettings();
+					this.plugin.typographyManager.updateTypography(true);
+				}));
+
+		new Setting(containerEl)
+			.setName(t('setting.typography-apply-foreshadowing'))
+			.addToggle(toggle => toggle
+				.setValue(typo.applyToForeshadowing)
+				.onChange(async (value) => {
+					typo.applyToForeshadowing = value;
+					await this.plugin.saveSettings();
+					this.plugin.typographyManager.updateTypography(true);
+				}));
+
+		new Setting(containerEl)
+			.setName(t('setting.typography-apply-task'))
+			.addToggle(toggle => toggle
+				.setValue(typo.applyToTask)
+				.onChange(async (value) => {
+					typo.applyToTask = value;
+					await this.plugin.saveSettings();
+					this.plugin.typographyManager.updateTypography(true);
+				}));
+
+		// 3. 详细排版参数
+		new Setting(containerEl).setName(t('setting.typography-details-heading')).setHeading();
+
+		new Setting(containerEl)
+			.setName(t('setting.typography-header-align'))
+			.addDropdown(dropdown => dropdown
+				.addOption('left', t('setting.typography-align-left'))
+				.addOption('center', t('setting.typography-align-center'))
+				.addOption('right', t('setting.typography-align-right'))
+				.setValue(typo.headerAlignment || 'center')
+				.onChange(async (value) => {
+					typo.headerAlignment = value as 'left' | 'center' | 'right';
+					await this.plugin.saveSettings();
+					this.plugin.typographyManager.updateTypography();
+				}));
+
+		new Setting(containerEl)
+			.setName(t('setting.typography-enable-body-font-size'))
+			.setDesc(t('setting.typography-enable-body-font-size-desc'))
+			.addToggle(toggle => toggle
+				.setValue(typo.enableBodyFontSize ?? false)
+				.onChange(async (value) => {
+					typo.enableBodyFontSize = value;
+					await this.plugin.saveSettings();
+					this.plugin.typographyManager.updateTypography();
+					this.display();
+				}));
+
+		if (typo.enableBodyFontSize) {
+			new Setting(containerEl)
+				.setName(t('setting.typography-body-font-size'))
+				.setDesc(t('setting.typography-body-font-size-desc'))
+				.addSlider(slider => slider
+					.setLimits(12, 32, 1)
+					.setValue(typo.bodyFontSize || 16)
+					.setDynamicTooltip()
+					.onChange(async (value) => {
+						typo.bodyFontSize = value;
+						await this.plugin.saveSettings();
+						this.plugin.typographyManager.updateTypography();
+					}));
+		}
+
+		new Setting(containerEl)
+			.setName(t('setting.typography-enable-indent'))
+			.addToggle(toggle => toggle
+				.setValue(typo.enableIndent)
+				.onChange(async (value) => {
+					typo.enableIndent = value;
+					await this.plugin.saveSettings();
+					this.plugin.typographyManager.updateTypography();
+				}));
+
+		new Setting(containerEl)
+			.setName(t('setting.typography-indent-size'))
+			.setDesc(t('setting.typography-indent-size-desc'))
+			.addText(text => text
+				.setValue(typo.indentSize || '2em')
+				.setPlaceholder('2em')
+				.onChange(async (value) => {
+					typo.indentSize = value.trim() || '2em';
+					await this.plugin.saveSettings();
+					this.plugin.typographyManager.updateTypography();
+				}));
+
+		new Setting(containerEl)
+			.setName(t('setting.typography-line-height'))
+			.setDesc(t('setting.typography-line-height-desc'))
+			.addText(text => text
+				.setValue(String(typo.lineHeight || 1.8))
+				.setPlaceholder('1.8')
+				.onChange(async (value) => {
+					const num = parseFloat(value);
+					if (!isNaN(num) && num > 0) {
+						typo.lineHeight = num;
+						await this.plugin.saveSettings();
+						this.plugin.typographyManager.updateTypography();
+					}
+				}));
+
+		new Setting(containerEl)
+			.setName(t('setting.typography-para-spacing'))
+			.setDesc(t('setting.typography-para-spacing-desc'))
+			.addText(text => text
+				.setValue(typo.paragraphSpacing || '0.5em')
+				.setPlaceholder('0.5em')
+				.onChange(async (value) => {
+					typo.paragraphSpacing = value.trim() || '0.5em';
+					await this.plugin.saveSettings();
+					this.plugin.typographyManager.updateTypography();
+				}));
+
+		new Setting(containerEl)
+			.setName(t('setting.typography-letter-spacing'))
+			.setDesc(t('setting.typography-letter-spacing-desc'))
+			.addText(text => text
+				.setValue(typo.letterSpacing || '0.05em')
+				.setPlaceholder('0.05em')
+				.onChange(async (value) => {
+					typo.letterSpacing = value.trim() || '0.05em';
+					await this.plugin.saveSettings();
+					this.plugin.typographyManager.updateTypography();
+				}));
+
+		new Setting(containerEl)
+			.setName(t('setting.typography-max-line-width'))
+			.setDesc(t('setting.typography-max-line-width-desc'))
+			.addText(text => text
+				.setValue(typo.maxLineWidth || '700px')
+				.setPlaceholder('700px')
+				.onChange(async (value) => {
+					typo.maxLineWidth = value.trim() || '700px';
+					await this.plugin.saveSettings();
+					this.plugin.typographyManager.updateTypography();
+				}));
+
+		new Setting(containerEl)
+			.setName(t('setting.typography-justify-text'))
+			.setDesc(t('setting.typography-justify-text-desc'))
+			.addToggle(toggle => toggle
+				.setValue(typo.justifyText)
+				.onChange(async (value) => {
+					typo.justifyText = value;
+					await this.plugin.saveSettings();
+					this.plugin.typographyManager.updateTypography();
+				}));
+
+		new Setting(containerEl)
+			.setName(t('setting.typography-reading-compat'))
+			.setDesc(t('setting.typography-reading-compat-desc'))
+			.addToggle(toggle => toggle
+				.setValue(typo.enableReadingModeCompat)
+				.onChange(async (value) => {
+					typo.enableReadingModeCompat = value;
+					await this.plugin.saveSettings();
+					this.plugin.typographyManager.updateTypography(true);
+				}));
+	}
+}

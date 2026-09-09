@@ -1,0 +1,47 @@
+# Obsidian 用户数据
+data.json
+history-data.json
+cache-data.json
+notes-data.json
+merge-drafts.json
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# 编译输出
+main.js
+styles.css
+*.js.map
+
+# 操作系统
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 备份文件
+*.backup
+*.bak
+*.tmp
+
+# 运行时按需下载词典（公开源位于 dictionary 分支）
+/dict/
+
+# 临时文件
+*.jpg
+*.png
+*.gif
+*.webp
+!assets/*.png
+!assets/*.gif
+!assets/*.webp
+
+# 编辑器/IDE 配置
+.vscode/
+
+# 内部开发文档
+CODE_*.md
+release_note.md
+AGENTS.md

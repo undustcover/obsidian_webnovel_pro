@@ -1,0 +1,322 @@
+
+/* -- Corkboard -- */
+
+/* Corkboard View */
+body .workspace-leaf-content[data-type="webnovel-workbench"][data-type="webnovel-workbench"] .view-content,
+.wn-corkboard-container {
+	padding: 30px 40px 40px 40px;
+	overflow-y: auto;
+}
+
+
+.wn-corkboard-header {
+	margin-bottom: 20px;
+	position: sticky;
+	top: -30px;
+	z-index: 100;
+	background: color-mix(in srgb, var(--background-primary) 92%, transparent);
+	margin-top: -30px;
+	padding-top: 30px;
+	/* 包含搜索栏后底部追加内边距，与内容区拉开距离 */
+	padding-bottom: 16px;
+	border-bottom: 1px solid color-mix(in srgb, var(--background-modifier-border) 60%, transparent);
+	backdrop-filter: blur(12px);
+	-webkit-backdrop-filter: blur(12px);
+}
+
+
+.wn-corkboard-header-buttons {
+	position: absolute;
+	top: 30px;
+	right: 0;
+	display: flex;
+	gap: 8px;
+}
+
+
+.wn-corkboard-title {
+	margin: 0 0 10px 0;
+	padding-left: 0;
+	font-weight: 600;
+	font-size: var(--h2, 1.5em);
+	color: var(--inline-title-color, var(--h2-color, var(--text-normal)));
+}
+
+
+.wn-corkboard-hint {
+	color: var(--text-muted);
+	font-size: 0.9em;
+	margin: 0;
+	padding-left: 0;
+}
+
+.wn-corkboard-switch-novel {
+	cursor: pointer;
+	color: var(--text-muted);
+	transition: color 0.15s ease;
+}
+
+.wn-corkboard-switch-novel:hover {
+	color: var(--interactive-accent);
+}
+
+.wn-new-chapter-input {
+	width: 100%;
+	margin-bottom: 1em;
+}
+
+
+.wn-corkboard-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+	gap: 20px;
+	padding-bottom: 40px;
+	align-items: stretch;
+}
+
+
+.wn-corkboard-card {
+	position: relative;
+	z-index: 2;
+	background-color: var(--background-secondary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 8px;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+	display: flex;
+	flex-direction: column;
+	transition: transform 0.2s ease, box-shadow 0.2s ease;
+	overflow: hidden;
+	width: 100%;
+	max-width: 100%;
+	box-sizing: border-box;
+	min-height: 160px;
+}
+
+
+/* Legacy .wn-corkboard-volume-header superseded by unified protocol at L8231 */
+
+
+.wn-corkboard-card:hover {
+	transform: translateY(-2px);
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+	border-color: var(--interactive-accent);
+}
+
+
+.wn-corkboard-card-header {
+	padding: 8px 12px;
+	border-bottom: 1px solid var(--background-modifier-border);
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	background-color: var(--background-secondary-alt);
+	min-width: 0;
+}
+
+
+.wn-corkboard-card-title-container {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+	flex: 1;
+}
+
+
+.wn-corkboard-card-title {
+	font-weight: 600;
+	font-size: 0.9em;
+	color: var(--text-normal);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	cursor: pointer;
+	min-width: 0;
+	flex: 0 1 auto;
+}
+
+
+.wn-corkboard-card-title:hover {
+	color: var(--interactive-accent);
+	text-decoration: underline;
+}
+
+
+.wn-corkboard-card-title-edit {
+	opacity: 0;
+	cursor: pointer;
+	transition: opacity 0.2s ease;
+	display: flex;
+	align-items: center;
+	color: var(--text-muted);
+	transform: scale(0.8) translateY(2px);
+	flex-shrink: 0;
+}
+
+
+.wn-corkboard-card-title-container:hover .wn-corkboard-card-title-edit {
+	opacity: 0.8;
+}
+
+
+.wn-corkboard-card-status {
+	font-size: 0.75em;
+	padding: 2px 6px;
+	border-radius: 4px;
+	background-color: var(--background-modifier-hover);
+	color: var(--text-muted);
+	white-space: nowrap;
+	flex-shrink: 0;
+}
+
+
+.wn-corkboard-card-content {
+	flex: 1;
+	padding: 12px;
+	cursor: text;
+	position: relative;
+	min-height: 60px;
+	overflow-y: auto;
+	background-color: color-mix(in srgb, var(--background-secondary) 92%, var(--background-primary));
+}
+
+
+.wn-corkboard-card-text {
+	color: var(--text-normal);
+	line-height: 1.5;
+	font-size: 0.85em;
+	white-space: pre-wrap;
+	font-family: var(--font-text);
+}
+
+.wn-corkboard-card-text .wn-corkboard-card-p {
+	margin: 0;
+	min-height: 1.5em;
+}
+
+.wn-corkboard-card-text.is-empty {
+	color: var(--text-faint);
+	font-style: italic;
+}
+
+
+body textarea.wn-corkboard-textarea,
+body .wn-corkboard-card-content .wn-corkboard-textarea {
+	width: 100%;
+	min-height: 80px;
+	background: transparent;
+	border: none;
+	border-radius: 4px;
+	-webkit-border-radius: 4px;
+	-webkit-appearance: none;
+	appearance: none;
+	resize: none;
+	font-family: var(--font-text);
+	font-size: 0.95em;
+	line-height: 1.5;
+	color: var(--text-normal);
+	padding: 2px 4px;
+	box-sizing: border-box;
+	outline: none;
+	box-shadow: none;
+}
+
+
+body textarea.wn-corkboard-textarea:focus,
+body .wn-corkboard-card-content .wn-corkboard-textarea:focus {
+	background: transparent;
+	border: none;
+	outline: none;
+	box-shadow: none;
+}
+
+
+.wn-corkboard-card-footer {
+	padding: 8px 12px;
+	font-size: 0.8em;
+	color: var(--text-muted);
+	border-top: 1px dashed var(--background-modifier-border);
+	background-color: var(--background-primary);
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+}
+
+
+.wn-footer-2-lines .wn-corkboard-card-word-count {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-end;
+	justify-content: center;
+	align-self: center;
+	text-align: right;
+	margin-left: auto;
+	flex-shrink: 0;
+	gap: 1px;
+	line-height: 1.1;
+}
+
+
+.wn-footer-1-line .wn-corkboard-card-word-count {
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	justify-content: flex-end;
+	text-align: right;
+	margin-left: auto;
+	flex-shrink: 0;
+	line-height: 1.2;
+}
+
+.wn-corkboard-card-word-count.is-excluded {
+	color: var(--text-muted);
+	font-style: italic;
+	opacity: 0.85;
+}
+
+
+/* Corkboard Timeline Grouping */
+.wn-corkboard-toggle-group {
+	display: inline-flex;
+	gap: 4px;
+	margin-top: 14px;
+	margin-bottom: 0;
+	margin-left: 0;
+	padding: 4px;
+	background-color: var(--background-secondary-alt);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 8px;
+	align-items: center;
+}
+
+
+.wn-corkboard-toggle-btn {
+	background: transparent;
+	border: none;
+	color: var(--text-muted);
+	padding: 4px 14px;
+	cursor: pointer;
+	transition: all 0.2s ease;
+	font-size: 0.9em;
+	border-radius: 6px;
+}
+
+
+.wn-corkboard-toggle-btn:hover {
+	color: var(--text-normal);
+	background-color: var(--background-modifier-hover);
+}
+
+
+.wn-corkboard-toggle-btn.active {
+	background-color: var(--background-primary);
+	color: var(--text-normal);
+	font-weight: 500;
+	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08), 0 0 0 1px var(--background-modifier-border);
+}
+
+
+
+.wn-corkboard-group-header.collapsed {
+	border-bottom: none;
+}

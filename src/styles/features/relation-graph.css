@@ -1,0 +1,161 @@
+
+/* ========== Lore Board Graph Container ========== */
+.wn-lore-graph-container {
+	display: flex;
+	flex-direction: column;
+	width: 100%;
+	height: 100%;
+	flex: 1;
+	min-height: 0;
+	position: relative;
+}
+
+
+.wn-lore-graph-wrapper {
+	flex: 1;
+	position: relative;
+	min-height: 0;
+	overflow: hidden;
+}
+
+
+.wn-lore-graph-canvas {
+	display: block;
+	width: 100%;
+	height: 100%;
+}
+
+
+/* ===== Relation Graph View ===== */
+
+/* Graph container: fills the entire view area */
+/* Merged into .wna-relation-graph-container below */
+
+/* Canvas adaptive container */
+.wna-relation-graph-container canvas {
+	width: 100%;
+	height: 100%;
+	display: block;
+	touch-action: none;
+}
+
+
+/* Breadcrumb navigation (shown in local mode) */
+.wna-relation-graph-breadcrumb {
+	position: absolute;
+	top: 8px;
+	left: 12px;
+	z-index: 10;
+	font-size: 0.85em;
+	color: var(--text-muted);
+	display: flex;
+	align-items: center;
+	gap: 4px;
+}
+
+
+/* Breadcrumb clickable link */
+.wna-relation-graph-breadcrumb-link {
+	cursor: pointer;
+	color: var(--interactive-accent);
+	text-decoration: underline;
+}
+
+
+/* Operation hint text (bottom right) */
+.wna-relation-graph-hint {
+	position: absolute;
+	bottom: 12px;
+	right: 12px;
+	z-index: 10;
+	font-size: 0.75em;
+	color: var(--text-faint);
+	pointer-events: none;
+}
+
+
+/* Empty state hint when no data */
+.wna-relation-graph-empty {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 100%;
+	height: 100%;
+	color: var(--text-muted);
+	font-size: 0.9em;
+}
+
+
+/* ========== Lore Graph Theme Variables ========== */
+/*
+   Extracted style variables, allowing users to customize via CSS Snippets without recompiling the plugin
+   If not set, defaults from TS code will be used
+*/
+.wna-relation-graph-container,
+.wn-lore-graph-container {
+	width: 100%;
+	height: 100%;
+	position: relative;
+	overflow: hidden;
+
+	/* 字体族 */
+	--wna-rg-font-family: var(--font-interface, sans-serif);
+
+	/* 节点几何尺寸与文字排版 */
+	--wna-rg-node-radius: 3.5;
+	--wna-rg-node-highlight-radius: 5.5;
+	--wna-rg-node-font-size: 10;
+	--wna-rg-node-shadow-blur-selected: 15;
+	--wna-rg-node-shadow-blur-hover: 10;
+
+	/* 主角强调覆盖色 */
+	--wna-rg-protagonist-overlay: color-mix(in srgb, color-mix(in srgb, var(--interactive-accent) 20%, var(--color-red, var(--text-error, var(--interactive-accent))) 80%) 85%, transparent);
+	--wna-rg-protagonist-overlay-hover: color-mix(in srgb, color-mix(in srgb, var(--interactive-accent) 20%, var(--color-red, var(--text-error, var(--interactive-accent))) 80%) 85%, transparent);
+	--wna-rg-protagonist-shadow: color-mix(in srgb, var(--interactive-accent) 20%, var(--color-red, var(--text-error, var(--interactive-accent))) 80%);
+
+	/* 连线与渐变样式 */
+	--wna-rg-line-color: var(--graph-line, var(--background-modifier-border));
+	--wna-rg-line-width: 0.5;
+	--wna-rg-line-gradient-start-alpha: 0.25;
+	--wna-rg-line-gradient-end-alpha: 0.95;
+	--wna-rg-line-bidi-mid-alpha: 0.45;
+	--wna-rg-node-gap: 3.5;
+	--wna-rg-curve-offset: 20;
+
+	/* 端点样式：ring | dot | arrow | none；默认起点空心环、终点实心点 */
+	--wna-rg-source-marker: ring;
+	--wna-rg-target-marker: dot;
+	--wna-rg-start-dot-radius: 1.0;
+	--wna-rg-end-ring-radius: 1.0;
+	--wna-rg-source-marker-radius: var(--wna-rg-end-ring-radius);
+	--wna-rg-target-marker-radius: var(--wna-rg-start-dot-radius);
+	--wna-rg-arrow-length: 2.6;
+	--wna-rg-arrow-angle-deg: 26;
+
+	/* 关系标签排版样式 */
+	--wna-rg-label-font-size: 6;
+	--wna-rg-label-padding-x: 4;
+	--wna-rg-label-padding-y: 3;
+	--wna-rg-label-gap: 4;
+
+	/* 聚焦流光光束配置（彗星式渐变拖尾） */
+	/* 未设置 --wna-rg-pulse-color 时，流光跟随当前关系线颜色 */
+	--wna-rg-pulse-period-ms: 2200;
+	--wna-rg-pulse-trail-ratio: 0.35;
+	--wna-rg-pulse-glow-alpha: 0.35;
+	--wna-rg-pulse-core-alpha: 0.95;
+	--wna-rg-pulse-glow-ratio: 2.2;
+
+	/* 提及类型连线变量 */
+	--wna-rg-mention-line-color: var(--text-faint);
+	--wna-rg-mention-text-color: var(--text-faint);
+	--wna-rg-mention-border-color: var(--text-faint);
+	--wna-rg-mention-line-dash: 4, 4;
+	--wna-rg-mention-label-dash: 2, 2;
+}
+
+.wn-graph-color-probe {
+	display: none;
+	position: absolute;
+	pointer-events: none;
+}

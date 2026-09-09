@@ -1,0 +1,56 @@
+import { StateField, type Extension, type EditorState } from '@codemirror/state';
+import { showTooltip, type Tooltip } from '@codemirror/view';
+import type { AccurateCountSettings } from '../types/settings';
+import { t } from '../i18n';
+
+export interface SelectionCountTooltipPlugin {
+	settings: Pick<AccurateCountSettings, 'enableSelectionWordCount'>;
+	calculateAccurateWords(text: string): number;
+}
+
+export const selectionCountTooltipExtension = (plugin: SelectionCountTooltipPlugin): Extension => {
+	const cursorTooltipField = StateField.define<readonly Tooltip[]>({
+		create: getTooltip,
+
+		update(tooltips, tr) {
+			if (!tr.docChanged && !tr.selection) return tooltips;
+			return getTooltip(tr.state);
+		},
+
+		provide: f => showTooltip.computeN([f], state => state.field(f))
+	});
+
+	function getTooltip(state: EditorState): readonly Tooltip[] {
+		if (!plugin.settings.enableSelectionWordCount) {
+			return [];
+		}
+
+		const selection = state.selection.main;
+		if (selection.empty) {
+			return [];
+		}
+		
+		const selectedText = state.sliceDoc(selection.from, selection.to);
+		// 超过 1 个字符才显示
+		if (!selectedText || selectedText.length <= 1) {
+			return [];
+		}
+		
+		// 获取精准字数
+		const wordCount = plugin.calculateAccurateWords(selectedText);
+
+		return [{
+			pos: selection.to, // 悬浮在选区末尾
+			above: true,       // 尝试显示在上方
+			strictSide: true,
+			create: () => {
+				const dom = createDiv();
+				dom.className = 'cm-tooltip-selection-count';
+				dom.textContent = t('common.selection-count', { count: String(wordCount) });
+				return { dom };
+			}
+		}];
+	}
+
+	return [cursorTooltipField];
+};

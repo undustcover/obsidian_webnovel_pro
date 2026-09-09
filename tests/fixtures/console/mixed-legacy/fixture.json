@@ -1,0 +1,13 @@
+{
+  "fixtureVersion": 1,
+  "name": "mixed-legacy",
+  "projectRoot": "混合样本",
+  "expectedDiagnostics": [
+    "ID_DUPLICATE",
+    "ID_MISSING",
+    "ENUM_UNKNOWN",
+    "WIKILINK_BROKEN",
+    "ACTIVATION_ANCHOR_INVALID"
+  ],
+  "legacyKinds": ["chapter", "lore-file", "lore-h2", "timeline", "foreshadowing", "timed-task"]
+}

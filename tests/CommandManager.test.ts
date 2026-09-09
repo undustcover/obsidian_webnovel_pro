@@ -1,0 +1,578 @@
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+
+vi.mock('../src/ui/WorkbenchView', () => ({ WorkbenchView: class WorkbenchView {} }));
+vi.mock('../src/ui/ForeshadowingModal', () => ({
+    ForeshadowingInputModal: class ForeshadowingInputModal {},
+    ConfirmCreateForeshadowingFileModal: class ConfirmCreateForeshadowingFileModal {},
+    ForeshadowingRecoveryModal: class ForeshadowingRecoveryModal {}
+}));
+vi.mock('../src/ui/TimelineAddModal', () => ({ TimelineAddModal: class TimelineAddModal {} }));
+vi.mock('../src/ui/AdvancedSearchModal', () => ({ AdvancedSearchModal: class AdvancedSearchModal {} }));
+vi.mock('../src/ui/AddLoreModal', () => ({ AddLoreModal: class AddLoreModal {} }));
+vi.mock('../src/ui/GoalModal', () => ({ GoalModal: class GoalModal {} }));
+vi.mock('../src/ui/TypographyQuickModal', () => ({ TypographyQuickModal: class TypographyQuickModal {} }));
+vi.mock('../src/ui/DailyStatsActionModal', () => ({ DailyStatsActionModal: class DailyStatsActionModal {} }));
+export const mockAnnotateModalOpen = vi.fn();
+vi.mock('../src/ui/AnnotateDictModal', () => ({
+    AnnotateDictModal: class AnnotateDictModal {
+        public app: unknown;
+        public plugin: unknown;
+        public text: string;
+        constructor(app: unknown, plugin: unknown, text: string) {
+            this.app = app;
+            this.plugin = plugin;
+            this.text = text;
+        }
+        open = mockAnnotateModalOpen;
+    }
+}));
+
+vi.mock('../src/ui/ChapterSplitCollisionModal', () => ({
+    ChapterSplitCollisionModal: {
+        prompt: vi.fn().mockResolvedValue(null)
+    }
+}));
+
+import { MarkdownView, TFile, type Editor } from 'obsidian';
+import { mockNoticeMessages, resetNoticeMessages } from './mocks/obsidian';
+import { CommandManager } from '../src/core/CommandManager';
+import type { WebNovelAssistantPlugin } from '../src/types/plugin';
+import * as ChapterSplitterModule from '../src/services/ChapterSplitter';
+
+interface CommandManagerRegisteredCommand {
+    id: string;
+    name: string;
+    icon?: string;
+    editorCheckCallback?: (checking: boolean, editor: Editor, view: MarkdownView) => boolean | void;
+    callback?: () => Promise<void> | void;
+}
+
+describe('CommandManager - refresh-lore-cache', () => {
+    let mockApp: any;
+    let mockPlugin: any;
+    let registeredCommands: Map<string, any>;
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+        registeredCommands = new Map();
+
+        mockApp = {
+            workspace: {
+                trigger: vi.fn(),
+                getLeavesOfType: vi.fn().mockReturnValue([])
+            },
+            vault: {
+                getAbstractFileByPath: vi.fn()
+            }
+        };
+
+        mockPlugin = {
+            app: mockApp,
+            settings: {
+                typography: {
+                    enableBodyFontSize: false,
+                    bodyFontSize: 16
+                }
+            },
+            characterManager: {
+                rebuildCache: vi.fn().mockResolvedValue(undefined)
+            },
+            loreSyncService: {
+                bulkRefresh: vi.fn().mockResolvedValue({ total: 10, success: 9, failed: 1 })
+            },
+            addCommand: vi.fn().mockImplementation((cmd: any) => {
+                registeredCommands.set(cmd.id, cmd);
+            })
+        };
+    });
+
+    it('should register refresh-lore-cache command and invoke BOTH rebuildCache and bulkRefresh', async () => {
+        const commandManager = new CommandManager(mockPlugin);
+        commandManager.registerAllCommands();
+
+        const refreshCommand = registeredCommands.get('refresh-lore-cache');
+        expect(refreshCommand).toBeDefined();
+
+        await refreshCommand.callback();
+
+        // 1. Invoked both rebuildCache and bulkRefresh in sequence
+        expect(mockPlugin.characterManager.rebuildCache).toHaveBeenCalledTimes(1);
+        expect(mockPlugin.loreSyncService.bulkRefresh).toHaveBeenCalledTimes(1);
+
+        // 2. Triggered workspace signal to refresh workbench and relation graph views
+        expect(mockApp.workspace.trigger).toHaveBeenCalledWith('webnovel-workbench-lore-updated');
+    });
+
+	 it('registers the desktop Novel Console command without replacing legacy view commands', () => {
+		const commandManager = new CommandManager(mockPlugin);
+		commandManager.registerAllCommands();
+		expect(registeredCommands.has('open-novel-console')).toBe(true);
+		expect(registeredCommands.has('toggle-writing-status-view')).toBe(true);
+		expect(registeredCommands.has('toggle-workbench-view')).toBe(true);
+	 });
+
+    it('should handle failure during rebuildCache or bulkRefresh gracefully', async () => {
+        mockPlugin.characterManager.rebuildCache.mockRejectedValue(new Error('Rebuild failed'));
+
+        const commandManager = new CommandManager(mockPlugin);
+        commandManager.registerAllCommands();
+
+        const refreshCommand = registeredCommands.get('refresh-lore-cache');
+        expect(refreshCommand).toBeDefined();
+
+        // Should not throw unhandled rejection
+        await expect(refreshCommand.callback()).resolves.toBeUndefined();
+        expect(mockPlugin.loreSyncService.bulkRefresh).not.toHaveBeenCalled();
+    });
+
+    it('should handle failure during bulkRefresh gracefully', async () => {
+        mockPlugin.loreSyncService.bulkRefresh.mockRejectedValue(new Error('Bulk sync failed'));
+
+        const commandManager = new CommandManager(mockPlugin);
+        commandManager.registerAllCommands();
+
+        const refreshCommand = registeredCommands.get('refresh-lore-cache');
+        expect(refreshCommand).toBeDefined();
+
+        // Should not throw unhandled rejection
+        await expect(refreshCommand.callback()).resolves.toBeUndefined();
+        expect(mockPlugin.characterManager.rebuildCache).toHaveBeenCalledTimes(1);
+    });
+});
+
+interface MockEditor {
+    getSelection: () => string;
+}
+
+interface MockView {
+    file: TFile | null;
+}
+
+interface MockCommand {
+    id: string;
+    icon?: string;
+    editorCheckCallback?: (checking: boolean, editor: MockEditor, view: MockView) => boolean | void;
+}
+
+describe('CommandManager - annotate-to-dictionary', () => {
+    let mockApp: {
+        workspace: {
+            trigger: ReturnType<typeof vi.fn>;
+            getLeavesOfType: ReturnType<typeof vi.fn>;
+        };
+        vault: {
+            getAbstractFileByPath: ReturnType<typeof vi.fn>;
+        };
+    };
+    let mockPlugin: {
+        app: unknown;
+        settings: Record<string, unknown>;
+        proofreadingManager: {
+            isFileInsideDictionary: ReturnType<typeof vi.fn>;
+            prepareDictionaryForEditing: ReturnType<typeof vi.fn>;
+        };
+        addCommand: ReturnType<typeof vi.fn>;
+    };
+    let registeredCommands: Map<string, MockCommand>;
+    const chapterFile = { name: 'Chapter1.md', path: 'NovelBook/Chapter1.md', basename: 'Chapter1', extension: 'md' } as unknown as TFile;
+    const nonChapterFile = { name: 'Note.md', path: 'Other/Note.md', basename: 'Note', extension: 'md' } as unknown as TFile;
+    const dictFile = { name: '错词.md', path: 'NovelBook/校对词典/错词.md', basename: '错词', extension: 'md' } as unknown as TFile;
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+        registeredCommands = new Map();
+
+        mockApp = {
+            workspace: {
+                trigger: vi.fn(),
+                getLeavesOfType: vi.fn().mockReturnValue([])
+            },
+            vault: {
+                getAbstractFileByPath: vi.fn()
+            }
+        };
+
+        mockPlugin = {
+            app: mockApp,
+            settings: {},
+            proofreadingManager: {
+                isFileInsideDictionary: vi.fn().mockImplementation((p: TFile | string) => {
+                    const path = typeof p === 'string' ? p : p?.path;
+                    return path?.startsWith('NovelBook/校对词典') ?? false;
+                }),
+                prepareDictionaryForEditing: vi.fn().mockResolvedValue('NovelBook/校对词典')
+            },
+            addCommand: vi.fn().mockImplementation((cmd: MockCommand) => {
+                registeredCommands.set(cmd.id, cmd);
+            })
+        };
+    });
+
+    it('should register annotate-to-dictionary editor command with stable id and spell-check icon', () => {
+        const commandManager = new CommandManager(mockPlugin as unknown as WebNovelAssistantPlugin);
+        commandManager.registerAllCommands();
+
+        const cmd = registeredCommands.get('annotate-to-dictionary');
+        expect(cmd).toBeDefined();
+        expect(cmd?.id).toBe('annotate-to-dictionary');
+        expect(cmd?.icon).toBe('spell-check');
+        expect(cmd?.editorCheckCallback).toBeDefined();
+        expect(registeredCommands.has('refresh-creative-homepage')).toBe(false);
+        expect(registeredCommands.has('reset-stream-session')).toBe(false);
+        expect(registeredCommands.has('reset-immersive-layout')).toBe(false);
+    });
+
+    it('should return true on checking when selection is valid single-line text in a Markdown file', () => {
+        const commandManager = new CommandManager(mockPlugin as unknown as WebNovelAssistantPlugin);
+        commandManager.registerAllCommands();
+
+        const cmd = registeredCommands.get('annotate-to-dictionary');
+        const mockEditor: MockEditor = { getSelection: () => '迫不急待' };
+        const mockView: MockView = { file: chapterFile };
+
+        const available = cmd?.editorCheckCallback?.(true, mockEditor, mockView);
+        expect(available).toBe(true);
+    });
+
+    it('should return false on checking when selection is empty (no fallback to cursor word)', () => {
+        const commandManager = new CommandManager(mockPlugin as unknown as WebNovelAssistantPlugin);
+        commandManager.registerAllCommands();
+
+        const cmd = registeredCommands.get('annotate-to-dictionary');
+        const mockEditor: MockEditor = { getSelection: () => '' };
+        const mockView: MockView = { file: chapterFile };
+
+        const available = cmd?.editorCheckCallback?.(true, mockEditor, mockView);
+        expect(available).toBe(false);
+    });
+
+    it('should return false on checking when selection is multiline or >= 50 characters', () => {
+        const commandManager = new CommandManager(mockPlugin as unknown as WebNovelAssistantPlugin);
+        commandManager.registerAllCommands();
+
+        const cmd = registeredCommands.get('annotate-to-dictionary');
+        const multilineEditor: MockEditor = { getSelection: () => '第一行\n第二行' };
+        const longEditor: MockEditor = { getSelection: () => '字'.repeat(50) };
+        const mockView: MockView = { file: chapterFile };
+
+        expect(cmd?.editorCheckCallback?.(true, multilineEditor, mockView)).toBe(false);
+        expect(cmd?.editorCheckCallback?.(true, longEditor, mockView)).toBe(false);
+    });
+
+    it('should allow a non-chapter file but reject dictionary files and a missing file', () => {
+        const commandManager = new CommandManager(mockPlugin as unknown as WebNovelAssistantPlugin);
+        commandManager.registerAllCommands();
+
+        const cmd = registeredCommands.get('annotate-to-dictionary');
+        const mockEditor: MockEditor = { getSelection: () => '迫不急待' };
+
+        expect(cmd?.editorCheckCallback?.(true, mockEditor, { file: nonChapterFile })).toBe(true);
+        expect(cmd?.editorCheckCallback?.(true, mockEditor, { file: dictFile })).toBe(false);
+        expect(cmd?.editorCheckCallback?.(true, mockEditor, { file: null })).toBe(false);
+    });
+
+    it('should call prepareDictionaryForEditing and open AnnotateDictModal on execution', async () => {
+        const commandManager = new CommandManager(mockPlugin as unknown as WebNovelAssistantPlugin);
+        commandManager.registerAllCommands();
+
+        const cmd = registeredCommands.get('annotate-to-dictionary');
+        const mockEditor: MockEditor = { getSelection: () => '  迫不急待  ' };
+        const mockView: MockView = { file: chapterFile };
+
+        const result = cmd?.editorCheckCallback?.(false, mockEditor, mockView);
+        expect(result).toBe(true);
+
+        // Allow async promise microtask to complete
+        await Promise.resolve();
+
+        expect(mockPlugin.proofreadingManager.prepareDictionaryForEditing).toHaveBeenCalledTimes(1);
+        expect(mockAnnotateModalOpen).toHaveBeenCalledTimes(1);
+    });
+
+    it('should catch prepareDictionaryForEditing failure gracefully without throwing', async () => {
+        mockPlugin.proofreadingManager.prepareDictionaryForEditing.mockRejectedValue(new Error('Permission denied'));
+
+        const commandManager = new CommandManager(mockPlugin as unknown as WebNovelAssistantPlugin);
+        commandManager.registerAllCommands();
+
+        const cmd = registeredCommands.get('annotate-to-dictionary');
+        const mockEditor: MockEditor = { getSelection: () => '迫不急待' };
+        const mockView: MockView = { file: chapterFile };
+
+        const result = cmd?.editorCheckCallback?.(false, mockEditor, mockView);
+        expect(result).toBe(true);
+
+        // Allow async promise microtask to complete
+        await Promise.resolve();
+
+        expect(mockPlugin.proofreadingManager.prepareDictionaryForEditing).toHaveBeenCalledTimes(1);
+        expect(mockAnnotateModalOpen).not.toHaveBeenCalled();
+    });
+});
+
+describe('CommandManager - toggle-editor-typewriter', () => {
+    let mockDispatch: ReturnType<typeof vi.fn>;
+    let mockApp: {
+        workspace: {
+            trigger: ReturnType<typeof vi.fn>;
+            updateOptions: ReturnType<typeof vi.fn>;
+            getLeavesOfType: ReturnType<typeof vi.fn>;
+        };
+        vault: {
+            getAbstractFileByPath: ReturnType<typeof vi.fn>;
+        };
+    };
+    let mockPlugin: {
+        app: unknown;
+        settings: {
+            editorTypewriter?: {
+                enabled: boolean;
+                centerOffset: number;
+                unfocusedOpacity: number;
+            };
+            immersive?: {
+                typewriterEnabled?: boolean;
+            };
+        };
+        saveSettings: ReturnType<typeof vi.fn>;
+        addCommand: ReturnType<typeof vi.fn>;
+    };
+    let registeredCommands: Map<string, { id: string; name: string; callback?: () => unknown }>;
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+        resetNoticeMessages();
+        registeredCommands = new Map();
+
+        mockDispatch = vi.fn();
+        const mockView = Object.create(MarkdownView.prototype) as MarkdownView;
+        (mockView as unknown as { editor: { cm: { dispatch: typeof mockDispatch } } }).editor = {
+            cm: { dispatch: mockDispatch }
+        };
+
+        mockApp = {
+            workspace: {
+                trigger: vi.fn(),
+                updateOptions: vi.fn(),
+                getLeavesOfType: vi.fn().mockReturnValue([{ view: mockView }])
+            },
+            vault: {
+                getAbstractFileByPath: vi.fn()
+            }
+        };
+
+        mockPlugin = {
+            app: mockApp,
+            settings: {},
+            saveSettings: vi.fn().mockResolvedValue(undefined),
+            addCommand: vi.fn().mockImplementation((cmd: { id: string; name: string; callback?: () => unknown }) => {
+                registeredCommands.set(cmd.id, cmd);
+            })
+        };
+    });
+
+    it('should register toggle-editor-typewriter with stable id and localized name', () => {
+        const commandManager = new CommandManager(mockPlugin as unknown as WebNovelAssistantPlugin);
+        commandManager.registerAllCommands();
+
+        const cmd = registeredCommands.get('toggle-editor-typewriter');
+        expect(cmd).toBeDefined();
+        expect(cmd?.id).toBe('toggle-editor-typewriter');
+        expect(cmd?.name).toBe('启用/禁用普通编辑打字机滚动');
+    });
+
+    it('should initialize missing settings, toggle off to on, persist, refresh editors, and leave immersive isolated', async () => {
+        mockPlugin.settings = {
+            immersive: { typewriterEnabled: true }
+        };
+
+        const commandManager = new CommandManager(mockPlugin as unknown as WebNovelAssistantPlugin);
+        commandManager.registerAllCommands();
+
+        const cmd = registeredCommands.get('toggle-editor-typewriter');
+        await cmd?.callback?.();
+
+        expect(mockPlugin.settings.editorTypewriter).toEqual({
+            enabled: true,
+            centerOffset: 0,
+            unfocusedOpacity: 0.4
+        });
+        expect(mockPlugin.settings.immersive?.typewriterEnabled).toBe(true);
+        expect(mockPlugin.saveSettings).toHaveBeenCalledTimes(1);
+		expect(mockApp.workspace.updateOptions).not.toHaveBeenCalled();
+        expect(mockDispatch).toHaveBeenCalledWith({});
+        expect(mockNoticeMessages).toContain('[开启] 普通编辑打字机滚动已开启');
+    });
+
+    it('should toggle on to off, persist, refresh editors, and show disabled notice', async () => {
+        mockPlugin.settings.editorTypewriter = {
+            enabled: true,
+            centerOffset: 5,
+            unfocusedOpacity: 0.5
+        };
+
+        const commandManager = new CommandManager(mockPlugin as unknown as WebNovelAssistantPlugin);
+        commandManager.registerAllCommands();
+
+        const cmd = registeredCommands.get('toggle-editor-typewriter');
+        await cmd?.callback?.();
+
+        expect(mockPlugin.settings.editorTypewriter?.enabled).toBe(false);
+        expect(mockPlugin.settings.editorTypewriter?.centerOffset).toBe(5);
+        expect(mockPlugin.saveSettings).toHaveBeenCalledTimes(1);
+		expect(mockApp.workspace.updateOptions).not.toHaveBeenCalled();
+        expect(mockDispatch).toHaveBeenCalledWith({});
+        expect(mockNoticeMessages).toContain('[关闭] 普通编辑打字机滚动已关闭');
+    });
+
+    it('should rollback state, skip refresh, and show failure notice on save error', async () => {
+        mockPlugin.settings.editorTypewriter = {
+            enabled: false,
+            centerOffset: 0,
+            unfocusedOpacity: 0.4
+        };
+        mockPlugin.saveSettings.mockRejectedValue(new Error('Disk write error'));
+
+        const commandManager = new CommandManager(mockPlugin as unknown as WebNovelAssistantPlugin);
+        commandManager.registerAllCommands();
+
+        const cmd = registeredCommands.get('toggle-editor-typewriter');
+        await expect(Promise.resolve(cmd?.callback?.())).resolves.toBeUndefined();
+
+        expect(mockPlugin.settings.editorTypewriter.enabled).toBe(false);
+        expect(mockApp.workspace.updateOptions).not.toHaveBeenCalled();
+        expect(mockDispatch).not.toHaveBeenCalled();
+        expect(mockNoticeMessages).toContain('保存设置失败，请检查磁盘空间和权限');
+    });
+});
+
+describe('CommandManager - split-chapter-at-cursor', () => {
+    let mockApp: {
+        workspace: {
+            trigger: ReturnType<typeof vi.fn>;
+            getLeavesOfType: ReturnType<typeof vi.fn>;
+        };
+        vault: {
+            getAbstractFileByPath: ReturnType<typeof vi.fn>;
+        };
+    };
+    let mockPlugin: {
+        app: unknown;
+        settings: {
+            enableChapterTemplate: boolean;
+            chapterTemplatePaths: string[];
+            chapterTemplatePath: string;
+        };
+        fileExplorerPatcher: {
+            refreshManually: ReturnType<typeof vi.fn>;
+        };
+        addCommand: ReturnType<typeof vi.fn>;
+    };
+    let registeredCommands: Map<string, CommandManagerRegisteredCommand>;
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+        resetNoticeMessages();
+        registeredCommands = new Map();
+
+        mockApp = {
+            workspace: {
+                trigger: vi.fn(),
+                getLeavesOfType: vi.fn().mockReturnValue([])
+            },
+            vault: {
+                getAbstractFileByPath: vi.fn()
+            }
+        };
+
+        mockPlugin = {
+            app: mockApp,
+            settings: {
+                enableChapterTemplate: false,
+                chapterTemplatePaths: [],
+                chapterTemplatePath: ''
+            },
+            fileExplorerPatcher: {
+                refreshManually: vi.fn()
+            },
+            addCommand: vi.fn().mockImplementation((cmd: CommandManagerRegisteredCommand) => {
+                registeredCommands.set(cmd.id, cmd);
+            })
+        };
+    });
+
+    it('should register split-chapter-at-cursor with bilingual name, scissors icon, and editorCheckCallback', () => {
+        const commandManager = new CommandManager(mockPlugin as unknown as WebNovelAssistantPlugin);
+        commandManager.registerAllCommands();
+
+        const cmd = registeredCommands.get('split-chapter-at-cursor');
+        expect(cmd).toBeDefined();
+        expect(cmd?.id).toBe('split-chapter-at-cursor');
+        expect(cmd?.name).toBe('在光标处拆分章节');
+        expect(cmd?.icon).toBe('scissors');
+        expect(cmd?.editorCheckCallback).toBeDefined();
+    });
+
+    it('should only be available for full MarkdownView (checking=true)', () => {
+        const commandManager = new CommandManager(mockPlugin as unknown as WebNovelAssistantPlugin);
+        commandManager.registerAllCommands();
+
+        const cmd = registeredCommands.get('split-chapter-at-cursor');
+        const notMarkdownView = {} as unknown as MarkdownView;
+        const mockEditor = {} as unknown as Editor;
+        expect(cmd?.editorCheckCallback?.(true, mockEditor, notMarkdownView)).toBe(false);
+
+        const markdownView = Object.create(MarkdownView.prototype) as MarkdownView;
+        expect(cmd?.editorCheckCallback?.(true, mockEditor, markdownView)).toBe(true);
+    });
+
+    it('should invoke splitChapterAtCursor and pass naming prompt and explorer refresh callbacks', async () => {
+        const splitSpy = vi.spyOn(ChapterSplitterModule, 'splitChapterAtCursor').mockResolvedValue(true);
+
+        const commandManager = new CommandManager(mockPlugin as unknown as WebNovelAssistantPlugin);
+        commandManager.registerAllCommands();
+
+        const cmd = registeredCommands.get('split-chapter-at-cursor');
+        const mockEditor = {} as unknown as Editor;
+        const mockView = Object.create(MarkdownView.prototype) as MarkdownView;
+
+        const checkRes = cmd?.editorCheckCallback?.(false, mockEditor, mockView);
+        expect(checkRes).toBe(true);
+
+        // Allow async invocation in editorCheckCallback to run
+        await new Promise(resolve => setTimeout(resolve, 0));
+
+        expect(splitSpy).toHaveBeenCalledTimes(1);
+        const options = splitSpy.mock.calls[0][0];
+        expect(options.app).toBe(mockApp);
+        expect(options.view).toBe(mockView);
+        expect(options.editor).toBe(mockEditor);
+        expect(options.settings).toBe(mockPlugin.settings);
+        expect(options.onRequestName).toBeDefined();
+
+        // Test onRefreshExplorer passes through to refreshManually
+        options.onRefreshExplorer?.();
+        expect(mockPlugin.fileExplorerPatcher.refreshManually).toHaveBeenCalledTimes(1);
+
+        splitSpy.mockRestore();
+    });
+
+    it('should catch unexpected errors at the command boundary and show error notice', async () => {
+        const splitSpy = vi.spyOn(ChapterSplitterModule, 'splitChapterAtCursor').mockRejectedValue(new Error('Fatal explosion'));
+
+        const commandManager = new CommandManager(mockPlugin as unknown as WebNovelAssistantPlugin);
+        commandManager.registerAllCommands();
+
+        const cmd = registeredCommands.get('split-chapter-at-cursor');
+        const mockEditor = {} as unknown as Editor;
+        const mockView = Object.create(MarkdownView.prototype) as MarkdownView;
+
+        cmd?.editorCheckCallback?.(false, mockEditor, mockView);
+
+        // Allow async invocation in editorCheckCallback to run
+        await new Promise(resolve => setTimeout(resolve, 0));
+
+        expect(mockNoticeMessages).toContain('创建新章节失败: Error: Fatal explosion');
+        splitSpy.mockRestore();
+    });
+});

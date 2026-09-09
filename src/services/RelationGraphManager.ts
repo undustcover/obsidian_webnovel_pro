@@ -1,0 +1,712 @@
+/**
+ * 关系图谱数据管理器 (Relation Graph Manager)
+ *
+ * 负责从设定文件（lore files）中解析角色词条和角色之间的关系，
+ * 构建图谱所需的节点 + 有向边数据模型。
+ *
+ * 数据来源：
+ * 1. 节点 — 设定文件中的 ## 二级标题（与 CharacterManager 一致）
+ * 2. 显式关系 — 每个角色下 `### 关系` 三级标题块中的 `**关系类型**：目标角色` 格式
+ * 3. 隐式引用 — 角色正文中提到的其他已知角色名或别名（自动生成 "提及" 类型的边）
+ *
+ * 所有关系均为有向：声明者为 source（箭头起点），被指向者为 target（箭头终点）。
+ * 同一对角色可拥有两条方向不同的边（如 A→喜欢→B 和 B→厌恶→A）。
+ */
+
+import type { App, CachedMetadata, HeadingCache } from 'obsidian';
+import { TFile, TFolder } from 'obsidian';
+import { findBookRoot } from '../utils/path';
+import type { WebNovelAssistantPlugin } from '../types/plugin';
+import { t } from '../i18n';
+import { cleanLoreHeading } from './CharacterManager';
+
+// ==========================================
+// 类型定义
+// ==========================================
+
+/** 图谱节点 — 代表一个角色词条 */
+export interface GraphNode {
+	/** 角色名（唯一标识），取自 ## 标题文本 */
+	id: string;
+	/** 所属设定文件 */
+	file: TFile;
+	/** 原始标题文本（清理 Markdown 格式后） */
+	heading: string;
+	/** Canvas 坐标 x（初始化为 0，由 ForceLayoutEngine 赋值） */
+	x: number;
+	/** Canvas 坐标 y */
+	y: number;
+	/** 速度分量 x（力导向算法使用） */
+	vx: number;
+	/** 速度分量 y */
+	vy: number;
+	/** 是否被用户拖拽固定 */
+	pinned: boolean;
+	/** 是否为主角色 (例如 "类型：主角") */
+	isProtagonist?: boolean;
+	/** 节点角色类型（例如 "主角", "配角", "反派"） */
+	nodeType?: string;
+	/** 节点的别名列表（用于在正文扫描提及关联） */
+	aliases?: string[];
+}
+
+/**
+ * 图谱边 — 代表一条有向关系
+ *
+ * 关系的方向性由声明者决定：
+ * - 若 A 的设定写 `### 关系\n**喜欢**：B`，则 source=A, target=B, label="喜欢"
+ * - 若 B 的设定写 `### 关系\n**厌恶**：A`，则 source=B, target=A, label="厌恶"
+ * 这两条边方向相反，是两条独立的有向边。
+ */
+export interface GraphEdge {
+	/** 声明关系的角色（箭头起点） */
+	source: string;
+	/** 被指向的角色（箭头终点） */
+	target: string;
+	/** 关系描述标签（如 "喜欢"、"师父"、"提及"） */
+	label: string;
+	/** 关系来源类型：explicit=用户在 ### 关系 中显式声明，mention=正文自动扫描 */
+	type: 'explicit' | 'mention';
+}
+
+/** 完整的图谱数据 */
+export interface GraphData {
+	nodes: GraphNode[];
+	edges: GraphEdge[];
+}
+
+// ==========================================
+// 常量
+// ==========================================
+
+/**
+ * 匹配 `### 关系` 标题的候选关键词集合
+ * 同时支持中英文，确保国际化兼容
+ */
+const RELATION_HEADING_KEYWORDS: ReadonlySet<string> = new Set([
+	'关系', 'relation', 'relations', 'relationships',
+]);
+
+/**
+ * 匹配 `**关系类型**：目标角色` 格式的正则
+ *
+ * 捕获组 1 = 关系标签（如 "喜欢"），捕获组 2 = 目标列表
+ * 支持 ** 和 __ 两种加粗语法，支持半角/全角冒号
+ */
+const RELATION_LINE_REGEX = /(?:\*\*|__)(.+?)(?:\*\*|__)\s*[:：]\s*(.+)/;
+
+/**
+ * 目标角色分隔符正则
+ * 支持：顿号、半角逗号、全角逗号、竖线、斜杠
+ */
+const TARGET_SEPARATOR_REGEX = /[、,，|/]/;
+
+// ==========================================
+// 管理器实现
+// ==========================================
+
+export class RelationGraphManager {
+	private app: App;
+	private plugin: WebNovelAssistantPlugin;
+
+	constructor(app: App, plugin: WebNovelAssistantPlugin) {
+		this.app = app;
+		this.plugin = plugin;
+	}
+
+	/**
+	 * 解析指定设定文件，构建完整的图谱数据
+	 *
+	 * @param file 要解析的设定文件（必须位于设定文件夹内）
+	 * @returns 包含节点和有向边的图谱数据，若无有效数据则返回空图谱
+	 */
+	public async buildGraphData(file: TFile, options?: { enableGlobal?: boolean; autoLinkMentions?: boolean }): Promise<GraphData> {
+		let filesToParse: TFile[] = [file];
+		const enableGlobal = options?.enableGlobal ?? this.plugin.settings.loreGraphEnableGlobal;
+		const autoLinkMentions = options?.autoLinkMentions ?? this.plugin.settings.loreGraphAutoLinkMentions;
+
+		if (enableGlobal) {
+			const bookRoot = findBookRoot(this.app, this.plugin, file);
+			const loreFolder = this.plugin.characterManager?.findLoreFolder(bookRoot || '');
+			if (loreFolder && loreFolder instanceof TFolder) {
+				const getAllMdFiles = (folder: TFolder): TFile[] => {
+					let results: TFile[] = [];
+					for (const child of folder.children) {
+						if (child instanceof TFile && child.extension === 'md') {
+							results.push(child);
+						} else if (child instanceof TFolder) {
+							results = results.concat(getAllMdFiles(child));
+						}
+					}
+					return results;
+				};
+				const folderFiles = getAllMdFiles(loreFolder);
+				if (folderFiles.length > 0) {
+					filesToParse = folderFiles;
+				}
+			}
+		}
+
+		const allNodes: GraphNode[] = [];
+		const nodeIds = new Set<string>();
+		const fileDataCache = new Map<TFile, { fileCache: CachedMetadata; lines: string[] }>();
+
+		// 第一步：提取所有节点（包含正文本名与别名）
+		for (const f of filesToParse) {
+			const fileCache = this.app.metadataCache.getFileCache(f) ?? {};
+			const content = await this.app.vault.cachedRead(f);
+			const lines = content.split('\n');
+			fileDataCache.set(f, { fileCache, lines });
+			const nodes = this.extractNodes(f, fileCache, lines);
+
+			for (const node of nodes) {
+				if (!nodeIds.has(node.id)) {
+					nodeIds.add(node.id);
+					allNodes.push(node);
+				}
+			}
+		}
+
+		if (allNodes.length === 0) {
+			return { nodes: [], edges: [] };
+		}
+
+		// 构建名称与别名至标准节点 ID 的索引映射
+		const nameOrAliasToNodeId = new Map<string, string>();
+		for (const node of allNodes) {
+			nameOrAliasToNodeId.set(node.id, node.id);
+		}
+		for (const node of allNodes) {
+			if (node.aliases) {
+				for (const alias of node.aliases) {
+					if (!nameOrAliasToNodeId.has(alias)) {
+						nameOrAliasToNodeId.set(alias, node.id);
+					}
+				}
+			}
+		}
+
+		// 预先构建所有搜索词条列表（包含全称与别名，并按字符串长度降序排列，确保长词优先匹配）
+		const allSearchTerms: { term: string; targetId: string }[] = [];
+		for (const [term, targetId] of nameOrAliasToNodeId.entries()) {
+			allSearchTerms.push({ term, targetId });
+		}
+		allSearchTerms.sort((a, b) => b.term.length - a.term.length);
+
+		// 第二步：解析关系（显式关系 + 提及关联）
+		const allEdges: GraphEdge[] = [];
+		const directedPairs = new Set<string>();
+		const uniqueExplicitEdges = new Set<string>();
+
+		for (const f of filesToParse) {
+			const data = fileDataCache.get(f);
+			if (!data) continue;
+			const { fileCache, lines } = data;
+			const headings = fileCache.headings || [];
+			const level2Headings = headings.filter(h => h.level === 2);
+
+			if (level2Headings.length > 0) {
+				for (let i = 0; i < headings.length; i++) {
+					const heading = headings[i];
+					if (heading.level !== 2) continue;
+
+					const characterName = this.cleanHeadingText(heading.heading);
+					if (!characterName || !nodeIds.has(characterName)) continue;
+
+					const sectionStart = heading.position.end.line + 1;
+					const sectionEnd = this.findNextHeadingLine(headings, i, 2, lines.length);
+
+					const relationSection = this.findRelationSection(headings, i, sectionStart, sectionEnd, lines);
+
+					if (relationSection) {
+						const explicitEdges = this.parseExplicitRelations(
+							characterName, lines, relationSection.startLine, relationSection.endLine, nodeIds, nameOrAliasToNodeId
+						);
+						for (const edge of explicitEdges) {
+							const pairKey = `${edge.source}→${edge.target}`;
+							const uniqueKey = `${pairKey}|${edge.label}`;
+							if (!uniqueExplicitEdges.has(uniqueKey)) {
+								uniqueExplicitEdges.add(uniqueKey);
+								directedPairs.add(pairKey);
+								allEdges.push(edge);
+							}
+						}
+					}
+
+					if (autoLinkMentions) {
+						const mentionEdges = this.scanMentions(
+							characterName, lines, sectionStart, sectionEnd, relationSection, allSearchTerms
+						);
+						for (const edge of mentionEdges) {
+							const pairKey = `${edge.source}→${edge.target}`;
+							if (!directedPairs.has(pairKey)) {
+								directedPairs.add(pairKey);
+								allEdges.push(edge);
+							}
+						}
+					}
+				}
+			} else {
+				// 单文件词条模式
+				const characterName = this.cleanHeadingText(f.basename);
+				if (characterName && nodeIds.has(characterName)) {
+					const sectionStart = 0;
+					const sectionEnd = lines.length;
+					const relationSection = this.findRelationSection(headings, -1, sectionStart, sectionEnd, lines);
+
+					if (relationSection) {
+						const explicitEdges = this.parseExplicitRelations(
+							characterName, lines, relationSection.startLine, relationSection.endLine, nodeIds, nameOrAliasToNodeId
+						);
+						for (const edge of explicitEdges) {
+							const pairKey = `${edge.source}→${edge.target}`;
+							const uniqueKey = `${pairKey}|${edge.label}`;
+							if (!uniqueExplicitEdges.has(uniqueKey)) {
+								uniqueExplicitEdges.add(uniqueKey);
+								directedPairs.add(pairKey);
+								allEdges.push(edge);
+							}
+						}
+					}
+
+					// 额外支持从 Frontmatter 解析关系
+					const fm = fileCache.frontmatter;
+					if (fm) {
+						const rawRelations = (fm['relations'] ?? fm['关系']) as unknown;
+						if (Array.isArray(rawRelations)) {
+							for (const item of rawRelations) {
+								if (item && typeof item === 'object') {
+									const record = item as Record<string, unknown>;
+									const rawLabel = record['label'] ?? record['关系'] ?? record['type'];
+									const rawTarget = record['target'] ?? record['目标'] ?? record['name'];
+									const label = typeof rawLabel === 'string' || typeof rawLabel === 'number' ? String(rawLabel).trim() : '';
+									const targetRaw = typeof rawTarget === 'string' || typeof rawTarget === 'number' ? String(rawTarget).trim() : '';
+									if (label && targetRaw) {
+										const targetId = nameOrAliasToNodeId.get(targetRaw) || targetRaw;
+										if (nodeIds.has(targetId) && targetId !== characterName) {
+											const pairKey = `${characterName}→${targetId}`;
+											const uniqueKey = `${pairKey}|${label}`;
+											if (!uniqueExplicitEdges.has(uniqueKey)) {
+												uniqueExplicitEdges.add(uniqueKey);
+												directedPairs.add(pairKey);
+												allEdges.push({
+													source: characterName,
+													target: targetId,
+													label,
+													type: 'explicit'
+												});
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+
+					if (autoLinkMentions) {
+						const mentionEdges = this.scanMentions(
+							characterName, lines, sectionStart, sectionEnd, relationSection, allSearchTerms
+						);
+						for (const edge of mentionEdges) {
+							const pairKey = `${edge.source}→${edge.target}`;
+							if (!directedPairs.has(pairKey)) {
+								directedPairs.add(pairKey);
+								allEdges.push(edge);
+							}
+						}
+					}
+				}
+			}
+		}
+
+		return { nodes: allNodes, edges: allEdges };
+	}
+
+	/**
+	 * 从文件缓存中提取所有词条作为图谱节点，并提取节点的类型与别名（支持大纲二级标题与单文件模式）
+	 */
+	private extractNodes(file: TFile, fileCache: CachedMetadata, lines: string[]): GraphNode[] {
+		const nodes: GraphNode[] = [];
+		const seenIds = new Set<string>();
+
+		const headings = fileCache.headings || [];
+		const level2Headings = headings.filter(h => h.level === 2);
+
+		if (level2Headings.length > 0) {
+			for (let i = 0; i < headings.length; i++) {
+				const heading = headings[i];
+				if (heading.level !== 2) continue;
+
+				const headingText = this.cleanHeadingText(heading.heading);
+				if (!headingText || seenIds.has(headingText)) continue;
+
+				seenIds.add(headingText);
+
+				// 解析“类型”与“别名”
+				let isProtagonist = false;
+				let nodeType: string | undefined = undefined;
+				const aliases: string[] = [];
+
+				const sectionStart = heading.position.end.line + 1;
+				const sectionEnd = this.findNextHeadingLine(headings, i, 2, lines.length);
+
+				for (let lineIdx = sectionStart; lineIdx < sectionEnd; lineIdx++) {
+					const chunk = lines[lineIdx];
+					if (!chunk) continue;
+
+					// 查找 类型：主角、**类型**：主角 等
+					if (!nodeType) {
+						const typeMatch = chunk.match(/(?:\*\*|__)?(?:类型|Type)(?:\*\*|__)?\s*[:：]\s*([^\n]+)/i);
+						if (typeMatch) {
+							const typeStr = typeMatch[1].trim();
+							nodeType = typeStr;
+							if (typeStr.includes('主角')) {
+								isProtagonist = true;
+							}
+						}
+					}
+
+					// 查找 别名：三哥、**别名**：三哥 等
+					const aliasMatch = chunk.match(/(?:\*\*|__)?(?:别名|Alias)(?:\*\*|__)?\s*[:：]\s*([^\n]+)/i);
+					if (aliasMatch && aliasMatch[1]) {
+						const rawAliases = aliasMatch[1].split(TARGET_SEPARATOR_REGEX);
+						for (let a of rawAliases) {
+							a = a.trim();
+							if (a && a !== headingText && !aliases.includes(a)) {
+								aliases.push(a);
+							}
+						}
+					}
+				}
+
+				nodes.push({
+					id: headingText,
+					file,
+					heading: headingText,
+					x: 0,
+					y: 0,
+					vx: 0,
+					vy: 0,
+					pinned: false,
+					isProtagonist,
+					nodeType,
+					aliases: aliases.length > 0 ? aliases : undefined,
+				});
+			}
+		} else {
+			// 单文件词条模式：以文件名 basename 为正名
+			const headingText = this.cleanHeadingText(file.basename);
+			if (headingText && !seenIds.has(headingText)) {
+				seenIds.add(headingText);
+
+				let isProtagonist = false;
+				let nodeType: string | undefined = undefined;
+				const aliases: string[] = [];
+
+				// 1. 从 Frontmatter 解析
+				const fm = fileCache.frontmatter;
+				if (fm) {
+					const rawType = (fm['type'] ?? fm['类型']) as unknown;
+					if (typeof rawType === 'string' || typeof rawType === 'number') {
+						nodeType = String(rawType).trim();
+						if (nodeType.includes('主角')) isProtagonist = true;
+					}
+					const rawFmAliases = (fm['aliases'] ?? fm['alias'] ?? fm['别名']) as unknown;
+					if (Array.isArray(rawFmAliases)) {
+						for (const a of rawFmAliases) {
+							const cleanA = String(a).trim();
+							if (cleanA && cleanA !== headingText && !aliases.includes(cleanA)) {
+								aliases.push(cleanA);
+							}
+						}
+					} else if (typeof rawFmAliases === 'string' && rawFmAliases.trim()) {
+						for (const a of rawFmAliases.split(TARGET_SEPARATOR_REGEX)) {
+							const cleanA = a.trim();
+							if (cleanA && cleanA !== headingText && !aliases.includes(cleanA)) {
+								aliases.push(cleanA);
+							}
+						}
+					}
+				}
+
+				// 2. 从正文中解析
+				for (const chunk of lines) {
+					if (!chunk) continue;
+					if (!nodeType) {
+						const typeMatch = chunk.match(/(?:\*\*|__)?(?:类型|Type)(?:\*\*|__)?\s*[:：]\s*([^\n]+)/i);
+						if (typeMatch) {
+							const typeStr = typeMatch[1].trim();
+							nodeType = typeStr;
+							if (typeStr.includes('主角')) {
+								isProtagonist = true;
+							}
+						}
+					}
+					const aliasMatch = chunk.match(/(?:\*\*|__)?(?:别名|Alias)(?:\*\*|__)?\s*[:：]\s*([^\n]+)/i);
+					if (aliasMatch && aliasMatch[1]) {
+						const rawAliases = aliasMatch[1].split(TARGET_SEPARATOR_REGEX);
+						for (let a of rawAliases) {
+							const cleanA = a.trim();
+							if (cleanA && cleanA !== headingText && !aliases.includes(cleanA)) {
+								aliases.push(cleanA);
+							}
+						}
+					}
+				}
+
+				nodes.push({
+					id: headingText,
+					file,
+					heading: headingText,
+					x: 0,
+					y: 0,
+					vx: 0,
+					vy: 0,
+					pinned: false,
+					isProtagonist,
+					nodeType,
+					aliases: aliases.length > 0 ? aliases : undefined,
+				});
+			}
+		}
+
+		return nodes;
+	}
+
+	/**
+	 * 在当前 ## 标题的区段内，查找 `### 关系` 三级标题的行范围
+	 *
+	 * @returns 关系区段的起止行号，若未找到则返回 null
+	 */
+	private findRelationSection(
+		headings: HeadingCache[],
+		currentH2Index: number,
+		sectionStart: number,
+		sectionEnd: number,
+		lines: string[]
+	): { startLine: number; endLine: number } | null {
+		// 在当前 ## 的子标题中查找 ### 关系（单文件模式下在整个文档中查找关系标题）
+		const searchHeadings = currentH2Index >= 0 ? headings.slice(currentH2Index + 1) : headings;
+		for (let h = 0; h < searchHeadings.length; h++) {
+			const sub = searchHeadings[h];
+			// 大纲模式：遇到下一个 ## 或更高级标题时停止搜索
+			if (currentH2Index >= 0 && sub.level <= 2) break;
+
+			// 大纲模式下只关注 ### 三级标题；单文件模式下可为 ## 或 ### 或 ####
+			if (currentH2Index >= 0 && sub.level !== 3) continue;
+
+			// 检查标题文本是否匹配关系关键词
+			const subText = this.cleanHeadingText(sub.heading).toLowerCase();
+			if (!RELATION_HEADING_KEYWORDS.has(subText)) continue;
+
+			// 已找到关系标题，确定其内容的行范围
+			const relStart = sub.position.end.line + 1;
+			if (relStart >= sectionEnd) return null;
+
+			// 关系块结束于：下一个同级或更高级标题、或当前区段结束
+			let relEnd = sectionEnd;
+			for (let n = h + 1; n < searchHeadings.length; n++) {
+				if (searchHeadings[n].level <= sub.level) {
+					relEnd = Math.min(searchHeadings[n].position.start.line, sectionEnd);
+					break;
+				}
+			}
+
+			return { startLine: relStart, endLine: relEnd };
+		}
+
+		// 兜底：如果没有用 Markdown 标题声明，尝试搜索纯文本行 "#/##/### 关系" 或 "**关系**：" / "**人物关系**："
+		for (let lineIdx = sectionStart; lineIdx < sectionEnd; lineIdx++) {
+			const trimmed = lines[lineIdx]?.trim() || '';
+			const headingMatch = trimmed.match(/^#{1,4}\s+(.+)$/);
+			if (headingMatch) {
+				const headingText = this.cleanHeadingText(headingMatch[1]).toLowerCase();
+				if (RELATION_HEADING_KEYWORDS.has(headingText)) {
+					const relStart = lineIdx + 1;
+					let relEnd = sectionEnd;
+					for (let k = relStart; k < sectionEnd; k++) {
+						if (/^#{1,4}\s+/.test(lines[k]?.trim() || '')) {
+							relEnd = k;
+							break;
+						}
+					}
+					return { startLine: relStart, endLine: relEnd };
+				}
+			}
+
+			const labelMatch = trimmed.match(/^(?:\*\*|__)?(?:关系|人物关系|Relations?)(?:\*\*|__)?\s*[:：]?\s*$/i);
+			if (labelMatch) {
+				const relStart = lineIdx + 1;
+				let relEnd = sectionEnd;
+				for (let k = relStart; k < sectionEnd; k++) {
+					const nextTrim = lines[k]?.trim() || '';
+					if (/^#{1,4}\s+/.test(nextTrim) || /^(?:\*\*|__)?(?:[^\n*]+)(?:\*\*|__)?\s*[:：]/.test(nextTrim) && !nextTrim.includes('：') && !nextTrim.includes(':')) {
+						relEnd = k;
+						break;
+					}
+				}
+				return { startLine: relStart, endLine: relEnd };
+			}
+		}
+
+		return null;
+	}
+
+	/**
+	 * 解析 ### 关系 块中的显式关系声明
+	 *
+	 * 格式：`**关系标签**：目标角色[、目标角色2…]`
+	 * 每个目标角色生成一条有向边：当前角色 →关系标签→ 目标角色
+	 * 支持通过名称或别名自动映射至真实目标节点 ID
+	 */
+	private parseExplicitRelations(
+		sourceName: string,
+		lines: string[],
+		startLine: number,
+		endLine: number,
+		validNodeIds: Set<string>,
+		nameOrAliasToNodeId?: Map<string, string>
+	): GraphEdge[] {
+		const edges: GraphEdge[] = [];
+
+		for (let i = startLine; i < endLine; i++) {
+			const line = lines[i]?.trim();
+			if (!line) continue;
+
+			const match = RELATION_LINE_REGEX.exec(line);
+			if (!match?.[1] || !match[2]) continue;
+
+			const relationLabel = match[1].trim();
+			const targetList = match[2].trim();
+
+			// 分隔多个目标角色（优先解析 [[文件#标题|显示名]] 双链语法）
+			const rawTargets: string[] = [];
+			const linkMatches = targetList.match(/\[\[.*?\]\]/g);
+			if (linkMatches && linkMatches.length > 0) {
+				rawTargets.push(...linkMatches);
+			} else {
+				rawTargets.push(...targetList.split(TARGET_SEPARATOR_REGEX).map(t => t.trim()));
+			}
+
+			for (let rawTarget of rawTargets) {
+				rawTarget = rawTarget.trim();
+				if (!rawTarget) continue;
+
+				// 提取真正的角色名：支持裸文本或 Obsidian 链接格式如 [[#张三]]、[[文件#张三|别名]]、[[目录/文件#张三]]、[[目录/单文件词条]]、[[张三]]
+				let target = rawTarget;
+				const linkMatch = target.match(/\[\[(.*?)\]\]/);
+				if (linkMatch) {
+					let inner = linkMatch[1];
+					if (inner.includes('|')) inner = inner.split('|')[0];
+					if (inner.includes('#')) {
+						const parts = inner.split('#');
+						inner = parts[parts.length - 1]; // 取 # 后面的真实标题
+					} else if (inner.includes('/')) {
+						const parts = inner.split('/');
+						inner = parts[parts.length - 1].replace(/\.md$/i, ''); // 嵌套路径下的单文件词条名
+					}
+					target = inner.trim();
+				}
+
+				// 将目标（可能是设定全称或别名）解析为标准节点 ID
+				const resolvedTarget = nameOrAliasToNodeId ? (nameOrAliasToNodeId.get(target) || target) : target;
+
+				// 只添加指向已知角色节点的边
+				if (resolvedTarget && validNodeIds.has(resolvedTarget) && resolvedTarget !== sourceName) {
+					edges.push({
+						source: sourceName,
+						target: resolvedTarget,
+						label: relationLabel,
+						type: 'explicit',
+					});
+				}
+			}
+		}
+
+		return edges;
+	}
+
+	/**
+	 * 在角色正文区段中扫描其他已知角色全称或别名的出现
+	 *
+	 * 排除 ### 关系 块的行，避免与显式关系重复。
+	 * 每个被提及的角色生成一条 type: 'mention' 的有向边。
+	 */
+	private scanMentions(
+		sourceName: string,
+		lines: string[],
+		sectionStart: number,
+		sectionEnd: number,
+		relationSection: { startLine: number; endLine: number } | null,
+		validNodeIdsOrSearchTerms: Set<string> | { term: string; targetId: string }[]
+	): GraphEdge[] {
+		const mentioned = new Set<string>();
+		const edges: GraphEdge[] = [];
+
+		let searchTerms: { term: string; targetId: string }[];
+		if (Array.isArray(validNodeIdsOrSearchTerms)) {
+			searchTerms = validNodeIdsOrSearchTerms;
+		} else {
+			searchTerms = Array.from(validNodeIdsOrSearchTerms)
+				.map(id => ({ term: id, targetId: id }))
+				.sort((a, b) => b.term.length - a.term.length);
+		}
+
+		for (let i = sectionStart; i < sectionEnd; i++) {
+			// 跳过关系声明块，避免将显式声明的目标角色重复计入
+			if (relationSection && i >= relationSection.startLine && i < relationSection.endLine) {
+				continue;
+			}
+
+			const line = lines[i] || '';
+			for (const { term, targetId } of searchTerms) {
+				if (targetId === sourceName) continue;
+				if (mentioned.has(targetId)) continue;
+
+				if (line.includes(term)) {
+					mentioned.add(targetId);
+					edges.push({
+						source: sourceName,
+						target: targetId,
+						label: t('relation-graph.edge-mention'),
+						type: 'mention',
+					});
+				}
+			}
+		}
+
+		return edges;
+	}
+
+	/**
+	 * 查找当前标题到下一个同级或更高级标题之间的行号
+	 *
+	 * @param headings 完整的标题列表
+	 * @param currentIndex 当前标题在列表中的索引
+	 * @param maxLevel 当前标题的级别（2 表示 ##）
+	 * @param totalLines 文件总行数
+	 * @returns 区段结束行号（不含，即半开区间的右边界）
+	 */
+	private findNextHeadingLine(
+		headings: HeadingCache[],
+		currentIndex: number,
+		maxLevel: number,
+		totalLines: number
+	): number {
+		for (let h = currentIndex + 1; h < headings.length; h++) {
+			if (headings[h].level <= maxLevel) {
+				return headings[h].position.start.line;
+			}
+		}
+		return totalLines;
+	}
+
+	/**
+	 * 清理 Markdown 标题中的格式标记（加粗、斜体、行内代码、双向链接、Hashtag）
+	 *
+	 * 与 CharacterManager.cleanLoreHeading 保持一致
+	 */
+	private cleanHeadingText(raw: string): string {
+		return cleanLoreHeading(raw);
+	}
+}

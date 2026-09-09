@@ -1,0 +1,30 @@
+/* ========== Shared styles and cross-feature primitives ========== */
+
+.webnovel-add-btn-row {
+	border-top: none;
+	padding: 0;
+}
+
+.wn-border-error {
+	border-color: var(--background-modifier-error);
+}
+
+.wn-mb-12 {
+	margin-bottom: 12px;
+}
+
+/* Utility Classes */
+
+body .wn-hidden,
+.wn-hidden {
+	display: none;
+}
+
+body .wn-show-block,
+.wn-show-block {
+	display: block;
+}
+
+body .tooltip.wn-tooltip-left {
+	text-align: left;
+}

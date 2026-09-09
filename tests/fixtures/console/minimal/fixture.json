@@ -1,0 +1,11 @@
+{
+  "fixtureVersion": 1,
+  "name": "minimal",
+  "projectRoot": "雾港纪事",
+  "expected": {
+    "formalIds": 7,
+    "duplicateIds": [],
+    "missingNarrativeLevels": ["PART", "UNIT"],
+    "storyCode": "V01-C001"
+  }
+}

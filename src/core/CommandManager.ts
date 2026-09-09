@@ -1,0 +1,814 @@
+import { MarkdownView, Notice, TFile } from 'obsidian';
+import { isDesktop } from '../utils/platform';
+import type { WebNovelAssistantPlugin } from '../types/plugin';
+import { copyDocumentContent } from '../utils/ui';
+import { VIEW_TYPES } from '../constants';
+import { ChapterSorter } from '../services/ChapterSorter';
+import { ForeshadowingInputModal, ConfirmCreateForeshadowingFileModal, ForeshadowingRecoveryModal } from '../ui/ForeshadowingModal';
+import { findBookRoot } from '../utils/path';
+import { TimelineAddModal } from '../ui/TimelineAddModal';
+import type { TimelineEntry } from '../services/TimelineManager';
+import { AdvancedSearchModal } from '../ui/AdvancedSearchModal';
+import { WorkbenchView } from '../ui/WorkbenchView';
+import { AddLoreModal } from '../ui/AddLoreModal';
+import { t } from '../i18n';
+import { getDefaultFileName } from '../i18n/data-keys';
+import { GoalModal } from '../ui/GoalModal';
+import { resolveChapterTemplate } from '../utils/template';
+import { TypographyQuickModal } from '../ui/TypographyQuickModal';
+import { Logger } from '../utils/Logger';
+import { DailyStatsActionModal, type DailyStatsAction } from '../ui/DailyStatsActionModal';
+import { AnnotateDictModal } from '../ui/AnnotateDictModal';
+import { isSelectionEligibleForAnnotate } from '../utils/proofreadingHelpers';
+import { splitChapterAtCursor } from '../services/ChapterSplitter';
+import { ChapterSplitCollisionModal } from '../ui/ChapterSplitCollisionModal';
+
+function getSelectedOrCursorWord(editor: {
+	getSelection: () => string;
+	getCursor: () => { line: number; ch: number };
+	getRange: (from: { line: number; ch: number }, to: { line: number; ch: number }) => string;
+	getWordAt?: (pos: { line: number; ch: number }) => { from: { line: number; ch: number }; to: { line: number; ch: number } } | null;
+}): string {
+	const sel = editor.getSelection().trim();
+	if (sel) return sel;
+	const wordRange = editor.getWordAt?.(editor.getCursor());
+	if (wordRange) {
+		return editor.getRange(wordRange.from, wordRange.to).trim();
+	}
+	return '';
+}
+
+export class CommandManager {
+	private plugin: WebNovelAssistantPlugin;
+
+	constructor(plugin: WebNovelAssistantPlugin) {
+		this.plugin = plugin;
+	}
+
+	registerAllCommands() {
+		this.registerViewCommands();
+		this.registerTrackingCommands();
+		this.registerStickyNoteCommands();
+		this.registerChapterCommands();
+		this.registerForeshadowingCommands();
+		this.registerTimelineCommands();
+		this.registerLoreCommands();
+		this.registerMobileCommands();
+		this.registerHomepageCommands();
+		this.registerSearchCommands();
+		this.registerTypographyCommands();
+		this.registerProofreadingCommands();
+		this.registerEditorTypewriterCommands();
+	}
+
+	private registerTypographyCommands() {
+		this.plugin.addCommand({
+			id: 'quick-typography-adjustment',
+			name: t('command.quick-typography'),
+			icon: 'align-left',
+			callback: () => {
+				new TypographyQuickModal(this.plugin.app, this.plugin).open();
+			}
+		});
+
+		this.plugin.addCommand({
+			id: 'increase-body-font-size',
+			name: t('command.increase-body-font-size'),
+			icon: 'zoom-in',
+			callback: () => {
+				this.adjustBodyFontSize(1);
+			}
+		});
+
+		this.plugin.addCommand({
+			id: 'decrease-body-font-size',
+			name: t('command.decrease-body-font-size'),
+			icon: 'zoom-out',
+			callback: () => {
+				this.adjustBodyFontSize(-1);
+			}
+		});
+	}
+
+	private adjustBodyFontSize(delta: number): void {
+		const typography = this.plugin.settings.typography;
+		if (!typography.enableBodyFontSize) {
+			new Notice(t('notice.body-font-size-disabled'));
+			return;
+		}
+		const current = Number.isFinite(typography.bodyFontSize) && typography.bodyFontSize > 0
+			? typography.bodyFontSize
+			: 16;
+		typography.bodyFontSize = Math.min(32, Math.max(12, current + delta));
+		this.plugin.typographyManager.updateTypography();
+		void this.plugin.saveSettings();
+	}
+
+	private registerViewCommands() {
+		this.plugin.addCommand({
+			id: 'toggle-writing-status-view',
+			name: t('command.toggle-status-view'),
+			icon: 'bar-chart-2',
+			editorCallback: () => { void this.plugin.toggleStatusView(); }
+		});
+
+		this.plugin.addCommand({
+			id: 'toggle-foreshadowing-view',
+			name: t('command.toggle-foreshadowing-view'),
+			icon: 'bookmark',
+			editorCallback: () => { void this.plugin.toggleForeshadowingView(); }
+		});
+
+		this.plugin.addCommand({
+			id: 'toggle-timeline-view',
+			name: t('command.toggle-timeline-view'),
+			icon: 'git-commit',
+			editorCallback: () => { void this.plugin.toggleTimelineView(); }
+		});
+
+		this.plugin.addCommand({
+			id: 'toggle-workbench-view',
+			name: t('command.toggle-workbench-view'),
+			icon: 'laptop',
+			editorCallback: () => {
+				void this.plugin.viewManager.toggleView('webnovel-workbench');
+			}
+		});
+
+		this.plugin.addCommand({
+			id: 'toggle-corkboard-view',
+			name: t('command.open-corkboard'),
+			icon: 'library',
+			editorCallback: () => {
+				void this.plugin.viewManager.toggleView('webnovel-corkboard');
+			}
+		});
+
+		this.plugin.addCommand({
+			id: 'toggle-lore-overview-view',
+			name: t('command.open-lore-overview'),
+			icon: 'book-marked',
+			editorCallback: () => {
+				void this.plugin.viewManager.toggleView('webnovel-lore-overview');
+			}
+		});
+
+		if (isDesktop()) {
+			this.plugin.addCommand({
+				id: 'open-novel-console',
+				name: t('command.open-novel-console'),
+				icon: 'panel-top',
+				callback: () => { void this.plugin.viewManager.toggleView(VIEW_TYPES.NOVEL_CONSOLE); }
+			});
+		}
+
+		if (isDesktop()) { // Desktop
+			this.plugin.addCommand({
+				id: 'toggle-immersive-mode',
+				name: t('command.toggle-immersive-mode'),
+				icon: 'maximize-2',
+				callback: () => { void this.plugin.immersiveModeManager.toggleImmersiveMode(); }
+			});
+		}
+	}
+
+	private registerTrackingCommands() {
+		if (isDesktop()) {
+			this.plugin.addCommand({
+				id: 'toggle-tracking',
+				name: t('command.toggle-tracking'),
+				icon: 'timer',
+				callback: () => {
+					if (this.plugin.isTracking) this.plugin.stopTracking();
+					else this.plugin.startTracking();
+				}
+			});
+		}
+
+		this.plugin.addCommand({
+			id: 'reset-daily-stats',
+			name: t('command.reset-daily-stats'),
+			icon: 'trash-2',
+			callback: () => {
+				const today = window.moment().format('YYYY-MM-DD');
+				const currentWords = this.plugin.historyManager.getDailyStat(today)?.addedWords ?? 0;
+				new DailyStatsActionModal(
+					this.plugin.app,
+					currentWords,
+					action => { void this.applyDailyStatsAction(action); }
+				).open();
+			}
+		});
+	}
+
+	private async applyDailyStatsAction(action: DailyStatsAction): Promise<void> {
+		const today = window.moment().format('YYYY-MM-DD');
+		let successNotice: string;
+
+		try {
+			if (action.type === 'reset-all') {
+				if (this.plugin.isTracking) {
+					this.plugin.stopTracking();
+				}
+				this.plugin.historyManager.resetDailyStat(today);
+				this.plugin.focusMs = 0;
+				this.plugin.slackMs = 0;
+				this.plugin.sessionAddedWords = 0;
+				await this.plugin.editorTracker?.handleFileChange();
+				successNotice = t('notice.daily-stats-reset');
+			} else if (action.type === 'reset-words') {
+				this.plugin.historyManager.setDailyWords(today, 0);
+				this.plugin.sessionAddedWords = 0;
+				successNotice = t('notice.daily-stats-words-cleared');
+			} else {
+				this.plugin.historyManager.setDailyWords(today, action.words);
+				successNotice = t('notice.daily-stats-words-corrected', { count: String(action.words) });
+			}
+
+			await this.plugin.historyManager.saveHistory(true);
+			this.plugin.refreshStatusViews();
+			new Notice(successNotice);
+		} catch (error) {
+			Logger.error('[CommandManager] 更新今日写作统计失败:', error);
+			new Notice(t('notice.daily-stats-update-failed'));
+		}
+	}
+
+	private registerStickyNoteCommands() {
+		this.plugin.addCommand({
+			id: 'open-sticky-note-list',
+			name: t('command.open-sticky-note-list'),
+			icon: 'sticky-note',
+			callback: () => {
+				void this.plugin.viewManager.toggleView(VIEW_TYPES.STICKY_NOTE_LIST);
+			}
+		});
+
+		if (isDesktop()) {
+			this.plugin.addCommand({
+				id: 'create-blank-sticky-note',
+				name: t('command.create-blank-sticky-note'),
+				icon: 'sticky-note',
+				callback: () => {
+					this.plugin.stickyNoteManager.createStickyNote({ content: '', title: t('notice.new-note-title') }).catch(console.error);
+				}
+			});
+
+			this.plugin.addCommand({
+				id: 'toggle-floating-notes',
+				name: t('command.toggle-floating-notes'),
+				icon: 'file-text',
+				callback: () => {
+					void this.plugin.toggleFloatingNotesVisibility();
+				}
+			});
+		}
+	}
+
+	private registerChapterCommands() {
+		this.plugin.addCommand({
+			id: 'set-chapter-word-goal',
+			name: t('command.set-chapter-goal'),
+			icon: 'target',
+			editorCallback: (_editor, view) => {
+				const currentFile = view.file;
+				if (currentFile instanceof TFile) {
+					new GoalModal(this.plugin.app, this.plugin, currentFile).open();
+				}
+			}
+		});
+
+		this.plugin.addCommand({
+			id: 'create-next-chapter',
+			name: t('command.create-next-chapter'),
+			icon: 'file-plus',
+			editorCallback: async (editor, view) => {
+				const currentFile = view.file;
+				if (!currentFile) return;
+
+				const folder = currentFile.parent;
+				const siblingNames = folder
+					? folder.children
+						.filter((f): f is TFile => f instanceof TFile && f.extension === 'md')
+						.map(f => f.basename)
+					: [];
+
+				const newFileName = ChapterSorter.getNextChapterName(currentFile.basename, siblingNames);
+				if (!newFileName) {
+					new Notice(t('notice.chapter-number-unrecognized'));
+					return;
+				}
+
+				const newFilePath = folder && folder.path !== '/' ? `${folder.path}/${newFileName}` : newFileName;
+				const existingFile = this.plugin.app.vault.getAbstractFileByPath(newFilePath);
+				if (existingFile instanceof TFile) {
+
+					await this.plugin.app.workspace.getLeaf(false).openFile(existingFile);
+
+					return;
+
+				}
+				resolveChapterTemplate(this.plugin.app, this.plugin.settings, (templateContent) => {
+					if (templateContent === null) {
+						// 用户在多模板弹窗中取消了创建
+						return;
+					}
+					void (async () => {
+						try {
+							this.plugin.writingJourneyService?.markHandledCreate(newFilePath);
+							const newFile = await this.plugin.app.vault.create(newFilePath, templateContent);
+							const bookRoot = findBookRoot(this.plugin.app, this.plugin, currentFile, true);
+							if (bookRoot && this.plugin.writingJourneyService) {
+								try {
+									await this.plugin.writingJourneyService.recordChapterCreated(bookRoot, newFilePath, newFile.basename, 'create-next');
+								} catch (journeyErr) {
+									Logger.error('[CommandManager] Failed to record writing journey event for create-next:', journeyErr);
+								}
+							}
+							await this.plugin.app.workspace.getLeaf(false).openFile(newFile);
+							new Notice(t('notice.chapter-created', { name: newFileName }));
+							// 延迟触发文件树重排序，确保 DOM 挂载完成后自动恢复规则排序
+							window.setTimeout(() => {
+								this.plugin.fileExplorerPatcher?.refreshManually();
+							}, 100);
+						} catch (error) {
+							console.error(error);
+							new Notice(t('notice.chapter-create-failed', { error: String(error) }));
+						}
+					})();
+				});
+			}
+		});
+
+		this.plugin.addCommand({
+			id: 'split-chapter-at-cursor',
+			name: t('command.split-chapter-at-cursor'),
+			icon: 'scissors',
+			editorCheckCallback: (checking, editor, view) => {
+				if (!(view instanceof MarkdownView)) return false;
+				if (checking) return true;
+
+				void (async () => {
+					try {
+						await splitChapterAtCursor({
+							app: this.plugin.app,
+							view,
+							editor,
+							settings: this.plugin.settings,
+							onRequestName: async (suggestedName, folder, reason) => {
+								return await ChapterSplitCollisionModal.prompt(this.plugin.app, suggestedName, folder, reason);
+							},
+							onRefreshExplorer: () => {
+								this.plugin.fileExplorerPatcher?.refreshManually();
+							},
+							writingJourneyService: this.plugin.writingJourneyService,
+							plugin: this.plugin
+						});
+					} catch (err) {
+						Logger.error('[CommandManager] Unexpected error splitting chapter:', err);
+						new Notice(t('notice.split-chapter-create-failed', { error: String(err) }));
+					}
+				})();
+
+				return true;
+			}
+		});
+
+		this.plugin.addCommand({
+			id: 'rebuild-folder-cache',
+			name: t('command.rebuild-folder-cache'),
+			icon: 'database',
+			callback: async () => {
+				if (!this.plugin.settings.showExplorerCounts) {
+					new Notice(t('notice.enable-explorer-counts-first'));
+					return;
+				}
+
+				this.plugin.cacheManager.clearCache();
+				const notice = new Notice(t('notice.rebuilding-explorer-cache'), 0);
+				try {
+					await this.plugin.cacheManager.buildInitialCache(
+						this.plugin.app.vault,
+						this.plugin.calculateAccurateWords.bind(this.plugin),
+						this.plugin.cacheManager.isEligibleForWordCount.bind(this.plugin.cacheManager)
+					);
+					notice.hide();
+					this.plugin.refreshFolderCounts();
+					new Notice(t('notice.cache-rebuild-complete'));
+				} catch (error) {
+					notice.hide();
+					new Notice(t('notice.cache-rebuild-failed', { error: String(error) }));
+					console.error('[Plugin] 缓存重建失败:', error);
+				}
+			}
+		});
+
+		this.plugin.addCommand({
+			id: 'refresh-chapter-sort',
+			name: t('command.refresh-chapter-sort'),
+			icon: 'sort-asc',
+			callback: () => {
+				if (!this.plugin.settings.enableSmartChapterSort) {
+					new Notice(t('notice.enable-smart-sort-first'));
+					return;
+				}
+				this.plugin.fileExplorerPatcher.refreshManually();
+				new Notice(t('notice.chapter-sort-refreshed'));
+			}
+		});
+	}
+
+	private registerForeshadowingCommands() {
+		this.plugin.addCommand({
+			id: 'mark-as-foreshadowing',
+			name: t('command.mark-as-foreshadowing'),
+			icon: 'flag',
+			editorCheckCallback: (checking, editor, view) => {
+				const file = view.file;
+				if (!file) return false;
+				if (checking) return true;
+
+				const initialText = getSelectedOrCursorWord(editor);
+
+				if (!this.plugin.foreshadowingManager) return false;
+				const fm = this.plugin.foreshadowingManager;
+				const submitCallback = (description: string, tags: string[]) => {
+					void (async () => {
+						try {
+							const { file: foreshadowFile, merged } = await fm.addForeshadowing(file, initialText, description, tags);
+							if (merged) {
+								new Notice(t('notice.foreshadowing-merged', { name: foreshadowFile.name }), 5000);
+							} else {
+								new Notice(t('notice.foreshadowing-marked', { name: foreshadowFile.name }), 5000);
+							}
+							if (isDesktop()) {
+								const notice = new Notice(t('notice.foreshadowing-click-to-open'), 8000);
+								notice.messageEl.addClass('wn-clickable');
+								notice.messageEl.onclick = () => {
+									void fm.openForeshadowingFile(foreshadowFile);
+									notice.hide();
+								};
+							}
+						} catch (err) {
+							console.error('[ForeshadowingManager] addForeshadowing failed:', err);
+							new Notice(t('notice.foreshadowing-mark-failed', { error: String(err) }));
+						}
+					})();
+				};
+
+				if (fm.foreshadowingFileExists(file)) {
+					void (async () => {
+						try {
+							const extraTags = await fm.getExistingTags(file);
+							new ForeshadowingInputModal(this.plugin.app, this.plugin, file.basename, initialText, submitCallback, extraTags).open();
+						} catch (err) {
+							console.error('[CommandManager] getExistingTags failed:', err);
+						}
+					})();
+				} else {
+					const fileName = this.plugin.settings.foreshadowing?.fileName || getDefaultFileName('foreshadowingFileName');
+					const folderPath = findBookRoot(this.plugin.app, this.plugin, file) || '';
+					new ConfirmCreateForeshadowingFileModal(this.plugin.app, fileName, folderPath, () => {
+						void (async () => {
+							try {
+								const extraTags = await fm.getExistingTags(file);
+								new ForeshadowingInputModal(this.plugin.app, this.plugin, file.basename, initialText, submitCallback, extraTags).open();
+							} catch (err) {
+								console.error('[CommandManager] getExistingTags failed:', err);
+							}
+						})();
+					}).open();
+				}
+				return true;
+			}
+		});
+
+		this.plugin.addCommand({
+			id: 'mark-foreshadowing-recovered',
+			name: t('command.mark-foreshadowing-recovered'),
+			icon: 'check-circle',
+			editorCheckCallback: (checking, editor, view) => {
+				const file = view.file;
+				if (!file) return false;
+
+				const foreshadowingFileName = (this.plugin.settings.foreshadowing?.fileName || getDefaultFileName('foreshadowingFileName')) + '.md';
+				if (file.name !== foreshadowingFileName) return false;
+				if (checking) return true;
+				if (!this.plugin.foreshadowingManager) return false;
+				const fm = this.plugin.foreshadowingManager;
+
+				const cursorLine = editor.getCursor().line;
+				const entry = fm.getEntryAtCursor(editor, cursorLine);
+
+				if (entry) {
+					new ForeshadowingRecoveryModal(
+						this.plugin.app,
+						this.plugin,
+						entry.contentPreview,
+						findBookRoot(this.plugin.app, this.plugin, file) || '',
+						(selectedChapters) => {
+							void (async () => {
+								try {
+									const success = await fm.markAsRecovered(
+										file, entry.description, selectedChapters
+									);
+									if (success) {
+										const links = selectedChapters.map(c => `[[${c}]]`).join('、');
+										new Notice(t('notice.foreshadowing-recovered', { links }));
+									} else {
+										new Notice(t('notice.foreshadowing-entry-not-found'));
+									}
+								} catch (err) {
+									console.error('[CommandManager] markAsRecovered failed:', err);
+									new Notice(t('notice.foreshadowing-recovery-failed', { error: String(err) }));
+								}
+							})();
+						}
+					).open();
+					return true;
+				} else {
+					new Notice(t('notice.foreshadowing-cursor-hint'));
+					return true;
+				}
+			}
+		});
+	}
+
+	/**
+	 * 注册“添加到时间线”命令面板命令
+	 * 全平台通用（解决移动端无右键菜单导致无法快捷添加时间线的问题）
+	 */
+	private registerTimelineCommands() {
+		this.plugin.addCommand({
+			id: 'add-to-timeline',
+			name: t('command.add-to-timeline'),
+			icon: 'clock',
+			editorCheckCallback: (checking, editor, view) => {
+				const file = view.file;
+				if (!file) return false;
+				if (checking) return true;
+
+				const initialText = getSelectedOrCursorWord(editor);
+
+				const folderPath = findBookRoot(this.plugin.app, this.plugin, file) || '';
+				const tlManager = this.plugin.timelineManager;
+				const tlFile = tlManager.getTimelineFile(folderPath);
+				const chapterRef = ChapterSorter.generateChapterLinktext(
+					this.plugin.app,
+					this.plugin,
+					file,
+					folderPath,
+					{ sourcePath: tlFile?.path, useAlias: false }
+				);
+
+				// 读取已有条目中的类型，传入 Modal 供下拉选择
+				void (async () => {
+					try {
+						const localTypes: string[] = [];
+						if (tlFile) {
+							const tlContent = await this.plugin.app.vault.read(tlFile);
+							const tlEntries = tlManager.parseEntries(tlContent);
+							localTypes.push(
+								...new Set(tlEntries.map((e: TimelineEntry) => e.type).filter(Boolean))
+							);
+						}
+
+						new TimelineAddModal(
+							this.plugin.app,
+							this.plugin,
+							initialText,
+							chapterRef,
+							folderPath,
+							(result) => {
+								tlManager.appendEntry({
+									time: result.time,
+									description: result.description,
+									chapter: result.chapter,
+									type: result.type,
+									rawBlock: '',
+									origin: result.origin
+								}, folderPath).then(async () => {
+									new Notice(t('notice.timeline-added'));
+
+									// 刷新已打开的时间线视图
+									const leaves = this.plugin.app.workspace.getLeavesOfType(VIEW_TYPES.TIMELINE);
+									if (leaves.length > 0) {
+										// 给文件写入一点时间后再刷新视图
+										await new Promise(resolve => window.setTimeout(resolve, 100));
+										const refreshPromise = leaves[0].view.refresh?.();
+										if (refreshPromise instanceof Promise) {
+											await refreshPromise;
+										}
+									}
+								}).catch(console.error);
+							},
+							false, localTypes, initialText
+						).open();
+					} catch (err) {
+						console.error('[CommandManager] add-to-timeline failed:', err);
+					}
+				})();
+				return true;
+			}
+		});
+	}
+
+	/**
+	 * 注册“添加新设定”全平台命令面板命令
+	 */
+	private registerLoreCommands() {
+		this.plugin.addCommand({
+			id: 'add-new-lore',
+			name: t('command.add-new-lore'),
+			icon: 'book-plus',
+			editorCallback: (editor, view) => {
+				const activeFile = view.file;
+				const folderPath = activeFile ? (findBookRoot(this.plugin.app, this.plugin, activeFile) || '') : '';
+				const initialName = getSelectedOrCursorWord(editor);
+				new AddLoreModal(this.plugin.app, this.plugin, initialName, folderPath).open();
+			}
+		});
+
+		this.plugin.addCommand({
+			id: 'refresh-lore-cache',
+			name: t('command.refresh-lore-cache'),
+			icon: 'refresh-cw',
+			callback: async () => {
+				const notice = new Notice(t('notice.rebuilding-lore-cache'), 0);
+				try {
+					await this.plugin.characterManager.rebuildCache();
+					const stats = await this.plugin.loreSyncService.bulkRefresh();
+					notice.hide();
+					this.plugin.app.workspace.trigger('webnovel-workbench-lore-updated');
+					new Notice(t('notice.lore-cache-refreshed', {
+						total: String(stats.total),
+						success: String(stats.success),
+						failed: String(stats.failed)
+					}));
+				} catch (error) {
+					notice.hide();
+					console.error('[CommandManager] 重建设定缓存失败:', error);
+					new Notice(t('notice.lore-cache-refresh-failed', { error: String(error) }));
+				}
+			}
+		});
+	}
+
+	private registerMobileCommands() {
+		// 复制本文档：桌面端和移动端均生效（移动端无右键菜单，该命令尤为实用）
+		this.plugin.addCommand({
+			id: 'copy-full-content-mobile',
+			name: t('command.copy-document'),
+			icon: 'copy',
+			editorCallback: (editor, view) => {
+				void copyDocumentContent(view.file?.basename ?? '', editor.getValue());
+			}
+		});
+	}
+
+	private registerHomepageCommands() {
+		this.plugin.addCommand({
+			id: 'open-creative-homepage',
+			name: t('command.open-creative-homepage'),
+			icon: 'home',
+			editorCallback: () => {
+				const file = this.plugin.homepageManager?.getHomepageFile();
+				if (file) {
+					void this.plugin.app.workspace.getLeaf(false).openFile(file);
+				} else {
+					new Notice(t('notice.homepage-file-not-exist'));
+				}
+			}
+		});
+	}
+
+	private registerSearchCommands() {
+		this.plugin.addCommand({
+			id: 'advanced-webnovel-search',
+			name: t('command.advanced-search'),
+			icon: 'search',
+			callback: () => {
+				const sourceLeaf = this.plugin.immersiveModeManager.getSearchSourceLeaf();
+				new AdvancedSearchModal(this.plugin.app, this.plugin, sourceLeaf).open();
+			}
+		});
+
+		this.plugin.addCommand({
+			id: 'clear-workbench-filter',
+			name: t('command.clear-workbench-filter'),
+			icon: 'x-circle',
+			checkCallback: (checking) => {
+				const activeView = this.plugin.app.workspace.getActiveViewOfType(WorkbenchView);
+				let targetView = activeView;
+				if (!targetView) {
+					const leaf = this.plugin.app.workspace.getLeavesOfType(VIEW_TYPES.WORKBENCH).find(l => l.view instanceof WorkbenchView);
+					if (leaf && leaf.view instanceof WorkbenchView) {
+						targetView = leaf.view;
+					}
+				}
+				if (targetView) {
+					if (!checking) {
+						targetView.clearSearchInput();
+					}
+					return true;
+				}
+				return false;
+			}
+		});
+	}
+
+	private registerProofreadingCommands() {
+		this.plugin.addCommand({
+			id: 'annotate-to-dictionary',
+			name: t('command.annotate-to-dictionary'),
+			icon: 'spell-check',
+			editorCheckCallback: (checking, editor, view) => {
+				const file = view.file;
+				const selection = editor.getSelection();
+				const isEligible = isSelectionEligibleForAnnotate(
+					selection,
+					file,
+					(p) => this.plugin.proofreadingManager?.isFileInsideDictionary(p) ?? false
+				);
+
+				if (!isEligible) {
+					return false;
+				}
+
+				if (checking) {
+					return true;
+				}
+
+				void (async () => {
+					if (!this.plugin.proofreadingManager) return;
+					try {
+						await this.plugin.proofreadingManager.prepareDictionaryForEditing();
+						new AnnotateDictModal(this.plugin.app, this.plugin, selection.trim()).open();
+					} catch {
+						new Notice(t('notice.proofreading-prepare-failed'));
+					}
+				})();
+
+				return true;
+			}
+		});
+	}
+
+	private registerEditorTypewriterCommands(): void {
+		this.plugin.addCommand({
+			id: 'toggle-editor-typewriter',
+			name: t('command.toggle-editor-typewriter'),
+			icon: 'align-center',
+			callback: async () => {
+				await this.toggleEditorTypewriter();
+			}
+		});
+	}
+
+	private async toggleEditorTypewriter(): Promise<void> {
+		if (!this.plugin.settings.editorTypewriter) {
+			this.plugin.settings.editorTypewriter = {
+				enabled: false,
+				centerOffset: 0,
+				unfocusedOpacity: 0.4
+			};
+		}
+
+		const previousState = this.plugin.settings.editorTypewriter.enabled;
+		const nextState = !previousState;
+		this.plugin.settings.editorTypewriter.enabled = nextState;
+
+		try {
+			await this.plugin.saveSettings();
+		} catch (error) {
+			this.plugin.settings.editorTypewriter.enabled = previousState;
+			Logger.error('[CommandManager] 切换普通编辑打字机滚动失败:', error);
+			new Notice(t('notice.save-settings-failed'));
+			return;
+		}
+
+		try {
+			this.refreshOpenEditors();
+		} catch (error) {
+			Logger.error('[CommandManager] 刷新普通编辑打字机状态失败:', error);
+		}
+		new Notice(
+			nextState
+				? t('notice.editor-typewriter-enabled')
+				: t('notice.editor-typewriter-disabled')
+		);
+	}
+
+	private refreshOpenEditors(): void {
+		const leaves = this.plugin.app.workspace.getLeavesOfType('markdown');
+		for (const leaf of leaves) {
+			const view = leaf.view;
+			if (view instanceof MarkdownView && view.editor) {
+				const cm = (view.editor as unknown as { cm?: { dispatch: (tr: Record<string, unknown>) => void } }).cm;
+				if (cm && typeof cm.dispatch === 'function') {
+					cm.dispatch({});
+				}
+			}
+		}
+	}
+}

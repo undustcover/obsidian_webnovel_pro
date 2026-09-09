@@ -1,0 +1,13 @@
+{
+  "fixtureVersion": 1,
+  "name": "large",
+  "defaultFileCount": 10000,
+  "seed": "console-v1",
+  "batchSize": 50,
+  "distribution": {
+    "chapter": 7000,
+    "event": 2000,
+    "character": 800,
+    "task": 200
+  }
+}

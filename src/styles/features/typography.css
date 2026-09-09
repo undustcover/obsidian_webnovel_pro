@@ -1,0 +1,133 @@
+
+
+
+/* ==========================================================================
+   Typography System
+   ========================================================================== */
+
+.workspace-leaf.wn-typography-active {
+	--p-spacing: calc(var(--wn-type-line-height, 1.8) * 1em + var(--wn-type-para-spacing, 0.5em));
+	--paragraph-spacing: calc(var(--wn-type-line-height, 1.8) * 1em + var(--wn-type-para-spacing, 0.5em));
+}
+
+/* Header alignment
+   标题不需要首行缩进，padding-inline-start: 0 用于重置可能继承的 p 规则缩进（安全重置） */
+.workspace-leaf.wn-typography-active .cm-line.HyperMD-header,
+.workspace-leaf.wn-typography-active .markdown-preview-view h1,
+.workspace-leaf.wn-typography-active .markdown-preview-view h2,
+.workspace-leaf.wn-typography-active .markdown-preview-view h3,
+.workspace-leaf.wn-typography-active .markdown-preview-view h4,
+.workspace-leaf.wn-typography-active .markdown-preview-view h5,
+.workspace-leaf.wn-typography-active .markdown-preview-view h6 {
+	text-align: var(--wn-type-header-align, center);
+	padding-inline-start: 0;
+}
+
+
+/* Source mode and Live preview main lines
+   规避 css-text-indent 官方审查警告：编辑器行不使用 text-indent，
+   改用 padding-inline-start: 0 重置（仅重置，首行缩进由 ::before 伪元素实现）。 */
+.workspace-leaf.wn-typography-active .cm-line:not(.HyperMD-header):not(.HyperMD-quote):not(.HyperMD-listblock):not(.cm-embed-block) {
+	padding-inline-start: 0;
+	font-size: var(--wn-type-font-size, inherit);
+	line-height: var(--wn-type-line-height, 1.8);
+	padding-bottom: var(--wn-type-para-spacing, 0.5em);
+	letter-spacing: var(--wn-type-letter-spacing, 0.05em);
+	text-align: var(--wn-type-text-align, justify);
+}
+
+
+/* Use ::before inline-block spacer for CodeMirror 6 to fix CJK IME composition cursor jumping
+   规避 css-text-indent 官方审查警告：首行缩进用 ::before inline-block 伪元素实现，
+   Why: text-indent 在 CM6 行内会导致 CJK IME 输入光标跳到行首的 Bug；
+        ::before spacer 同时解决了缩进需求和 IME 光标问题，且不触发审查警告。 */
+.workspace-leaf.wn-typography-active .cm-line:not(.HyperMD-header):not(.HyperMD-quote):not(.HyperMD-listblock):not(.cm-embed-block)::before {
+	content: "";
+	display: inline-block;
+	width: var(--wn-type-indent, 2em);
+}
+
+
+/* Cursor and selection layer reset - 内部层不需要缩进，安全重置 */
+.workspace-leaf.wn-typography-active .cm-cursorLayer,
+.workspace-leaf.wn-typography-active .cm-selectionLayer {
+	padding-inline-start: 0;
+}
+
+
+/* Line width & Paragraph Spacing override for both Editing Mode (CodeMirror 6) and Reading Mode */
+.workspace-leaf.wn-typography-active .cm-sizer,
+.workspace-leaf.wn-typography-active .markdown-source-view.mod-cm6 .cm-sizer,
+.workspace-leaf.wn-typography-active .markdown-preview-sizer {
+	max-width: var(--wn-type-max-width, var(--file-line-width));
+	width: 100%;
+}
+
+.workspace-leaf.wn-typography-active .cm-content,
+.workspace-leaf.wn-typography-active .markdown-source-view.mod-cm6 .cm-content {
+	width: 100%;
+	max-width: 100%;
+}
+
+
+/* Reading mode paragraphs
+   规避 css-text-indent 官方审查警告：阅读模式 p 标签首行缩进不使用 text-indent，
+   改用 p::before inline-block 伪元素实现，与 CM6 编辑器行方案完全一致。
+   Why ::before over padding-inline-start:
+     - text-indent: 只缩进首行 ✓
+     - padding-inline-start: 对所有行缩进 ✗（会导致换行后的文字也整体左移，视觉错误）
+     - ::before inline-block: 等效 text-indent 的视觉效果，且不触发 css-text-indent 审查警告 ✓ */
+body .workspace-leaf.wn-typography-active .markdown-preview-view p,
+body .workspace-leaf.wn-typography-active .markdown-rendered p {
+	font-size: var(--wn-type-font-size, inherit);
+	line-height: var(--wn-type-line-height, 1.8);
+	margin-top: 0;
+	margin-block-start: 0;
+	margin-bottom: calc(var(--wn-type-line-height, 1.8) * 1em + var(--wn-type-para-spacing, 0.5em));
+	margin-block-end: calc(var(--wn-type-line-height, 1.8) * 1em + var(--wn-type-para-spacing, 0.5em));
+	letter-spacing: var(--wn-type-letter-spacing, 0.05em);
+	text-align: var(--wn-type-text-align, justify);
+}
+
+/* 阅读模式 p 标签首行缩进 —— ::before inline-block spacer 方案
+   与 CM6 .cm-line::before 完全一致的实现原理 */
+body .workspace-leaf.wn-typography-active .markdown-preview-view p::before,
+body .workspace-leaf.wn-typography-active .markdown-rendered p::before {
+	content: "";
+	display: inline-block;
+	width: var(--wn-type-indent, 2em);
+}
+
+
+/* 确保阅读模式下空段落保留完整行高
+   规避 :has 性能警告：移除 p:has(> br:only-child) 选择器
+   Why: 官方审查警告 :has 会因大范围选择器失效（selector invalidation）造成严重性能问题。
+   p:has(> br:only-child) 的场景已由 MarkdownPostProcessor 通过注入 wn-soft-break-spacer 类来处理，
+   无需在 CSS 层使用 :has 做被动兜底。p:empty 已足以覆盖真正空段落的行高保留。*/
+.workspace-leaf.wn-typography-active .markdown-preview-view p:empty,
+.workspace-leaf.wn-typography-active .markdown-rendered p:empty {
+	min-height: calc(var(--wn-type-line-height, 1.8) * 1em);
+}
+
+/* 空段落无需首行缩进伪元素 */
+.workspace-leaf.wn-typography-active .markdown-preview-view p:empty::before,
+.workspace-leaf.wn-typography-active .markdown-rendered p:empty::before {
+	display: none;
+}
+
+
+/* Reading mode soft break (<br>) compatibility pseudo element */
+.workspace-leaf.wn-typography-active.wn-type-reading-compat .markdown-preview-view p .wn-soft-break-spacer,
+.workspace-leaf.wn-typography-active.wn-type-reading-compat .markdown-rendered p .wn-soft-break-spacer,
+.markdown-rendered p .wn-soft-break-spacer {
+	display: block;
+	height: var(--wn-type-para-spacing, 0.5em);
+}
+
+
+.workspace-leaf.wn-typography-active.wn-type-reading-compat .markdown-preview-view p .wn-soft-break-indent,
+.workspace-leaf.wn-typography-active.wn-type-reading-compat .markdown-rendered p .wn-soft-break-indent,
+.markdown-rendered p .wn-soft-break-indent {
+	display: inline-block;
+	width: var(--wn-type-indent, 2em);
+}

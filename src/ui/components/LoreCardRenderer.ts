@@ -1,0 +1,445 @@
+import { MarkdownRenderer, type Component, setIcon, type App } from 'obsidian';
+import { t } from '../../i18n';
+import type { AccurateCountSettings } from '../../types/settings';
+import type { CharacterManager, LoreEntry } from '../../services/CharacterManager';
+import { cleanLoreHeading } from '../../services/CharacterManager';
+import { smartLocateAndHighlight } from '../../utils/leaf';
+import { injectSoftBreakIndentPlaceholders } from '../../utils/softBreakIndent';
+
+export interface LoreCardRendererPlugin {
+	app: App;
+	settings: Pick<AccurateCountSettings, 'lorePopoverCollapse'>;
+	characterManager: Pick<CharacterManager, 'getLoreContent' | 'updateLoreContent'>;
+}
+
+export class LoreCardRenderer {
+	private static readonly aliasBadgeCleanups = new WeakMap<HTMLElement, () => void>();
+
+	private static renderAliasBadges(header: HTMLElement, aliases: string[], component: Component): void {
+		LoreCardRenderer.aliasBadgeCleanups.get(header)?.();
+		header.querySelector('.wn-lore-card-badges')?.remove();
+
+		if (aliases.length === 0) return;
+
+		const badgesContainer = header.createDiv({ cls: 'wn-lore-card-badges is-measuring' });
+		const aliasBadges = aliases.map(alias =>
+			badgesContainer.createSpan({ cls: 'wn-lore-card-badge', text: alias })
+		);
+		const overflowBadge = badgesContainer.createSpan({ cls: 'wn-lore-card-overflow-badge' });
+		const ownerWindow = header.ownerDocument?.defaultView ?? null;
+		let animationFrameId: number | null = null;
+		let resizeObserver: ResizeObserver | null = null;
+		let isCleanedUp = false;
+
+		const layoutBadges = () => {
+			animationFrameId = null;
+			if (!badgesContainer.isConnected) return;
+
+			badgesContainer.hidden = false;
+			badgesContainer.addClass('is-measuring');
+			for (const badge of aliasBadges) {
+				badge.hidden = false;
+				badge.removeClass('is-truncated');
+			}
+			overflowBadge.hidden = false;
+
+			const style = ownerWindow?.getComputedStyle(badgesContainer);
+			const paddingLeft = Math.ceil(Number.parseFloat(style?.paddingLeft ?? '0'));
+			const paddingRight = Math.ceil(Number.parseFloat(style?.paddingRight ?? '0'));
+			const gap = Math.ceil(Number.parseFloat(style?.columnGap || style?.gap || '0'));
+			const availableWidth = Math.max(0, Math.floor(badgesContainer.clientWidth) - paddingLeft - paddingRight);
+			const badgeWidths = aliasBadges.map(badge => Math.ceil(badge.getBoundingClientRect().width));
+			const prefixWidths = [0];
+			for (const width of badgeWidths) {
+				prefixWidths.push(prefixWidths[prefixWidths.length - 1] + width);
+			}
+
+			const allAliasesWidth = prefixWidths[aliases.length] + gap * Math.max(0, aliases.length - 1);
+			let visibleCount = -1;
+			if (allAliasesWidth <= availableWidth) {
+				visibleCount = aliases.length;
+				overflowBadge.hidden = true;
+			} else if (aliases.length === 1 && availableWidth > 0) {
+				visibleCount = 1;
+				aliasBadges[0].addClass('is-truncated');
+				overflowBadge.hidden = true;
+			} else {
+				for (let count = aliases.length - 1; count >= 0; count--) {
+					const hiddenCount = aliases.length - count;
+					overflowBadge.setText(`+${hiddenCount}`);
+					const overflowWidth = Math.ceil(overflowBadge.getBoundingClientRect().width);
+					const aliasesWidth = prefixWidths[count] + gap * Math.max(0, count - 1);
+					const totalWidth = aliasesWidth + (count > 0 ? gap : 0) + overflowWidth;
+					if (totalWidth <= availableWidth) {
+						visibleCount = count;
+						overflowBadge.title = aliases.slice(count).join('、');
+						break;
+					}
+				}
+			}
+
+			for (let index = 0; index < aliasBadges.length; index++) {
+				aliasBadges[index].hidden = index >= Math.max(0, visibleCount);
+			}
+			if (visibleCount < 0) {
+				overflowBadge.hidden = true;
+				badgesContainer.hidden = true;
+			}
+			badgesContainer.removeClass('is-measuring');
+		};
+
+		const scheduleLayout = () => {
+			if (isCleanedUp || animationFrameId !== null) return;
+			if (ownerWindow) {
+				animationFrameId = ownerWindow.requestAnimationFrame(layoutBadges);
+			} else {
+				layoutBadges();
+			}
+		};
+
+		if (ownerWindow?.ResizeObserver) {
+			resizeObserver = new ownerWindow.ResizeObserver(scheduleLayout);
+			resizeObserver.observe(header);
+		}
+		scheduleLayout();
+
+		const cleanup = () => {
+			if (isCleanedUp) return;
+			isCleanedUp = true;
+			if (animationFrameId !== null && ownerWindow) {
+				ownerWindow.cancelAnimationFrame(animationFrameId);
+				animationFrameId = null;
+			}
+			resizeObserver?.disconnect();
+			resizeObserver = null;
+			if (LoreCardRenderer.aliasBadgeCleanups.get(header) === cleanup) {
+				LoreCardRenderer.aliasBadgeCleanups.delete(header);
+			}
+		};
+		LoreCardRenderer.aliasBadgeCleanups.set(header, cleanup);
+		component.register(cleanup);
+	}
+
+	static async buildCardDOM(
+		container: HTMLElement,
+		entry: LoreEntry,
+		plugin: LoreCardRendererPlugin,
+		component: Component,
+		options: {
+			draggable?: boolean;
+			dragDataMimeType?: string;
+			onTitleClick?: () => void;
+			hideEditButton?: boolean;
+		} = {}
+	): Promise<void> {
+		const card = container.createDiv({ cls: 'wn-lore-card' });
+		if (options.draggable) {
+			card.setAttribute('draggable', 'true');
+			card.setAttribute('data-lore-heading', entry.heading);
+			card.addEventListener('dragstart', (e) => {
+				if (e.dataTransfer) {
+					e.dataTransfer.effectAllowed = 'all';
+					const mime = options.dragDataMimeType || 'application/wn-lore-heading';
+					e.dataTransfer.setData(mime, entry.heading);
+				}
+				window.setTimeout(() => card.addClass('is-dragging'), 0);
+			});
+			card.addEventListener('dragend', () => {
+				card.removeClass('is-dragging');
+			});
+		}
+
+		// Header area
+		const header = card.createDiv({ cls: 'wn-lore-card-header' });
+		const titleContainer = header.createDiv({ cls: 'wn-lore-card-title-container' });
+
+		const titleEl = titleContainer.createDiv({ cls: 'wn-lore-card-title' });
+		titleEl.setText(entry.heading);
+		titleEl.title = t('corkboard.click-to-open-lore');
+
+		titleEl.onclick = async () => {
+			if (options.onTitleClick) {
+				options.onTitleClick();
+			}
+			
+			// 找到词条对应的行号，并分屏打开
+			const fileCache = plugin.app.metadataCache.getFileCache(entry.file);
+			let fallbackLine: number | undefined;
+			if (fileCache && fileCache.headings) {
+				for (const h of fileCache.headings) {
+					const rawHeading = cleanLoreHeading(h.heading);
+					if (rawHeading === cleanLoreHeading(entry.heading)) {
+						fallbackLine = h.position.start.line;
+						break;
+					}
+				}
+			}
+			
+			await smartLocateAndHighlight(plugin.app, entry.file, [`## ${entry.heading}`, `# ${entry.heading}`, entry.heading], {
+				splitIfNew: true,
+				fallbackLine
+			});
+		};
+
+		if (!options.hideEditButton) {
+			const editBtn = titleContainer.createDiv({ cls: 'wn-lore-card-edit-btn' });
+			setIcon(editBtn, 'pencil');
+			editBtn.title = t('corkboard.edit-lore');
+		
+			let isEditing = false;
+			editBtn.onclick = async () => {
+				if (isEditing) return;
+				isEditing = true;
+				if (options.draggable) card.setAttribute('draggable', 'false');
+
+				const maxBodyScroll = Math.max(1, body.scrollHeight - body.clientHeight);
+				const scrollRatio = Math.max(0, Math.min(1, body.scrollTop / maxBodyScroll));
+
+				const oldContentEls = Array.from(body.children);
+				oldContentEls.forEach((el) => { (el as HTMLElement).hidden = true; });
+
+				body.addClass('is-editing');
+				const editorContainer = body.createDiv({ cls: 'wn-lore-card-editor' });
+				const textarea = editorContainer.createEl('textarea', { cls: 'wn-lore-card-textarea' });
+				
+				const rawContent = await plugin.characterManager.getLoreContent(entry);
+				textarea.value = rawContent;
+
+				const ownerWindow = textarea.ownerDocument?.defaultView ?? null;
+				const scheduleLayout = (cb: () => void) => {
+					if (ownerWindow?.requestAnimationFrame) {
+						ownerWindow.requestAnimationFrame(cb);
+					} else if (ownerWindow?.setTimeout) {
+						ownerWindow.setTimeout(cb, 0);
+					} else {
+						cb();
+					}
+				};
+
+				scheduleLayout(() => {
+					if (!textarea.isConnected) return;
+					const roughCharIndex = Math.floor(rawContent.length * scrollRatio);
+					textarea.focus({ preventScroll: true });
+					textarea.setSelectionRange(roughCharIndex, roughCharIndex);
+					const maxTextareaScroll = Math.max(0, textarea.scrollHeight - textarea.clientHeight);
+					textarea.scrollTop = Math.round(scrollRatio * maxTextareaScroll);
+				});
+
+				let isSaving = false;
+				let isCancelled = false;
+
+				const exitEdit = () => {
+					body.removeClass('is-editing');
+					editorContainer.remove();
+					oldContentEls.forEach((el) => { (el as HTMLElement).hidden = false; });
+					isEditing = false;
+					if (options.draggable) card.setAttribute('draggable', 'true');
+				};
+
+				const performSave = async () => {
+					if (isSaving || isCancelled) return;
+					const newVal = textarea.value;
+					if (newVal !== rawContent) {
+						isSaving = true;
+						await plugin.characterManager.updateLoreContent(entry, newVal);
+						body.removeClass('is-editing');
+						body.empty();
+						isEditing = false;
+						if (options.draggable) card.setAttribute('draggable', 'true');
+						await LoreCardRenderer.renderBodyContent(body, header, entry, plugin, component);
+					} else {
+						exitEdit();
+					}
+				};
+
+				textarea.addEventListener('blur', () => {
+					void performSave();
+				});
+
+				textarea.addEventListener('keydown', (e) => {
+					if (e.key === 'Escape') {
+						e.preventDefault();
+						isCancelled = true;
+						exitEdit();
+					}
+				});
+			};
+		}
+
+		// Body area
+		const body = card.createDiv({ cls: 'wn-lore-card-body' });
+		body.setAttr('tabindex', '0');
+		await LoreCardRenderer.renderBodyContent(body, header, entry, plugin, component);
+	}
+
+	private static async renderBodyContent(
+		body: HTMLElement,
+		header: HTMLElement,
+		entry: LoreEntry,
+		plugin: LoreCardRendererPlugin,
+		component: Component
+	): Promise<void> {
+		const loadingEl = body.createDiv({ cls: 'wn-lore-card-loading', text: t('common.loading') });
+		try {
+			const fileContent = await plugin.app.vault.cachedRead(entry.file);
+			const fileCache = plugin.app.metadataCache.getFileCache(entry.file);
+
+			let chunkToRender = '';
+			let aliases: string[] = [];
+
+			let hasMatchedH2 = false;
+			if (fileCache && fileCache.headings) {
+				const headings = fileCache.headings;
+				let startIndex = -1;
+				let endIndex = -1;
+
+				for (let i = 0; i < headings.length; i++) {
+					const h = headings[i];
+					const rawHeading = cleanLoreHeading(h.heading);
+					if (rawHeading === cleanLoreHeading(entry.heading) && h.level === 2) {
+						hasMatchedH2 = true;
+						startIndex = h.position.end.line + 1;
+						let nextLevelH = null;
+						for (let j = i + 1; j < headings.length; j++) {
+							if (headings[j].level <= 2) {
+								nextLevelH = headings[j];
+								break;
+							}
+						}
+						endIndex = nextLevelH ? nextLevelH.position.start.line : -1;
+						break;
+					}
+				}
+
+				if (startIndex !== -1) {
+					const lines = fileContent.split('\n');
+					const slice = endIndex === -1 ? lines.slice(startIndex) : lines.slice(startIndex, endIndex);
+					const rawChunk = slice.join('\n');
+
+					const aliasMatch = rawChunk.match(/^(?:\*\*|__)?(?:别名|Alias)(?:\*\*|__)?\s*[:：]\s*([^\n]+)/im);
+					if (aliasMatch && aliasMatch[1]) {
+						aliases = aliasMatch[1].split(/[,，、/|;；]/).map(s => s.trim()).filter(Boolean);
+						chunkToRender = rawChunk.replace(aliasMatch[0], '').trim();
+					} else {
+						chunkToRender = rawChunk.trim();
+					}
+				}
+			}
+
+			// 单文件词条模式回退（若无匹配的二级标题且词条名为文件名 basename）
+			if (!hasMatchedH2 && cleanLoreHeading(entry.heading) === cleanLoreHeading(entry.file.basename)) {
+				// 1. 从 Frontmatter 中解析别名
+				const fm = fileCache?.frontmatter;
+				if (fm) {
+					const rawFmAliases = (fm['aliases'] ?? fm['alias'] ?? fm['别名']) as unknown;
+					if (Array.isArray(rawFmAliases)) {
+						for (const a of rawFmAliases) {
+							if (typeof a === 'string' || typeof a === 'number') {
+								const cleanA = String(a).trim();
+								if (cleanA && !aliases.includes(cleanA)) aliases.push(cleanA);
+							}
+						}
+					} else if (typeof rawFmAliases === 'string' && rawFmAliases.trim()) {
+						for (const a of rawFmAliases.split(/[,，、/|;；]/)) {
+							const cleanA = a.trim();
+							if (cleanA && !aliases.includes(cleanA)) aliases.push(cleanA);
+						}
+					}
+				}
+
+				// 2. 移除 Frontmatter
+				let bodyText = fileContent;
+				if (bodyText.startsWith('---\n') || bodyText.startsWith('---\r\n')) {
+					const endMatch = bodyText.match(/^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/);
+					if (endMatch) {
+						bodyText = bodyText.slice(endMatch[0].length);
+					}
+				}
+				// 移除顶部的 # 一级标题（如果存在）
+				bodyText = bodyText.replace(/^\s*#\s+[^\n]*\r?\n/, '');
+
+				// 3. 从正文中解析别名声明行并提取
+				const aliasMatches = bodyText.matchAll(/(?:\*\*|__)?(?:别名|Alias)(?:\*\*|__)?\s*[:：]\s*([^\n]+)/gi);
+				for (const match of aliasMatches) {
+					if (match[1]) {
+						const rawAliases = match[1].split(/[,，、/|;；]/);
+						for (const a of rawAliases) {
+							const cleanA = a.trim();
+							if (cleanA && !aliases.includes(cleanA)) {
+								aliases.push(cleanA);
+							}
+						}
+					}
+				}
+				// 从渲染内容中移除别名声明行，避免与顶部 badges 重复
+				chunkToRender = bodyText.replace(/^(?:\*\*|__)?(?:别名|Alias)(?:\*\*|__)?\s*[:：]\s*[^\n]+\r?\n?/gim, '').trim();
+			}
+
+			loadingEl.remove();
+
+			LoreCardRenderer.renderAliasBadges(header, aliases, component);
+
+			if (chunkToRender) {
+				const markdownContainer = body.createDiv({ cls: 'wn-lore-markdown' });
+				await MarkdownRenderer.render(plugin.app, chunkToRender, markdownContainer, entry.file.path, component);
+				injectSoftBreakIndentPlaceholders(markdownContainer, false);
+
+				if (plugin.settings.lorePopoverCollapse) {
+					const headingEls = Array.from(markdownContainer.querySelectorAll<HTMLElement>('h3, h4, h5, h6'));
+					if (headingEls.length > 0) {
+						const updateVisibility = () => {
+							const children = Array.from(markdownContainer.children) as HTMLElement[];
+							let activeCollapsedLevel = 99;
+
+							for (const child of children) {
+								if (child.tagName.match(/^H[3-6]$/i)) {
+									const level = parseInt(child.tagName.substring(1), 10);
+									if (level <= activeCollapsedLevel) {
+										activeCollapsedLevel = 99;
+									}
+
+									if (activeCollapsedLevel < level) {
+										child.addClass('is-hidden');
+									} else {
+										child.removeClass('is-hidden');
+										if (child.hasClass('is-collapsed')) {
+											activeCollapsedLevel = level;
+										}
+									}
+								} else {
+									if (activeCollapsedLevel < 99) {
+										child.addClass('is-hidden');
+									} else {
+										child.removeClass('is-hidden');
+									}
+								}
+							}
+						};
+
+						for (const el of headingEls) {
+							el.addClass('is-collapsible');
+							el.addClass('is-collapsed');
+
+							el.addEventListener('click', (e) => {
+								e.stopPropagation();
+								if (el.hasClass('is-collapsed')) {
+									el.removeClass('is-collapsed');
+								} else {
+									el.addClass('is-collapsed');
+								}
+								updateVisibility();
+							});
+						}
+
+						updateVisibility();
+					}
+				}
+			} else {
+				body.createDiv({ cls: 'wn-lore-card-empty', text: t('corkboard.lore-empty-content') });
+			}
+		} catch (e) {
+			loadingEl.setText(t('common.error-loading'));
+			console.error(e);
+		}
+	}
+}
