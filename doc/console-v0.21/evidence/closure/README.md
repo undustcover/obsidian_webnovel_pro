@@ -53,6 +53,12 @@
 - [旧能力回归](P0-093-legacy-regression.md)
 - [完整工程验证](P0-093-engineering-validation.md)
 - [发布候选固化](P0-093-release-candidate.md)
+- [候选包真实 Obsidian 复验](P0-093-rc-smoke.md)
+
+## P0-094 最终验收
+
+- [任务与证据对账](P0-094-task-audit.md)
+- [AC-01～32 最终验收](P0-094-ac-audit.md)
 
 ## 索引维护规则
 
