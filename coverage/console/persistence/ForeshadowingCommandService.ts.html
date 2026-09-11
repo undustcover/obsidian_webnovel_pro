@@ -1,0 +1,121 @@
+
+<!doctype html>
+<html lang="en">
+
+<head>
+    <title>Code coverage report for console/persistence/ForeshadowingCommandService.ts</title>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="../../prettify.css" />
+    <link rel="stylesheet" href="../../base.css" />
+    <link rel="shortcut icon" type="image/x-icon" href="../../favicon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style type='text/css'>
+        .coverage-summary .sorter {
+            background-image: url(../../sort-arrow-sprite.png);
+        }
+    </style>
+</head>
+    
+<body>
+<div class='wrapper'>
+    <div class='pad1'>
+        <h1><a href="../../index.html">All files</a> / <a href="index.html">console/persistence</a> ForeshadowingCommandService.ts</h1>
+        <div class='clearfix'>
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">100% </span>
+                <span class="quiet">Statements</span>
+                <span class='fraction'>7/7</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">82.6% </span>
+                <span class="quiet">Branches</span>
+                <span class='fraction'>19/23</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">100% </span>
+                <span class="quiet">Functions</span>
+                <span class='fraction'>4/4</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">100% </span>
+                <span class="quiet">Lines</span>
+                <span class='fraction'>7/7</span>
+            </div>
+        
+            
+        </div>
+        <p class="quiet">
+            Press <em>n</em> or <em>j</em> to go to the next uncovered block, <em>b</em>, <em>p</em> or <em>k</em> for the previous block.
+        </p>
+        <template id="filterTemplate">
+            <div class="quiet">
+                Filter:
+                <input type="search" id="fileSearch">
+            </div>
+        </template>
+    </div>
+    <div class='status-line high'></div>
+    <pre><table class="coverage">
+<tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
+<a name='L2'></a><a href='#L2'>2</a>
+<a name='L3'></a><a href='#L3'>3</a>
+<a name='L4'></a><a href='#L4'>4</a>
+<a name='L5'></a><a href='#L5'>5</a>
+<a name='L6'></a><a href='#L6'>6</a>
+<a name='L7'></a><a href='#L7'>7</a>
+<a name='L8'></a><a href='#L8'>8</a>
+<a name='L9'></a><a href='#L9'>9</a>
+<a name='L10'></a><a href='#L10'>10</a>
+<a name='L11'></a><a href='#L11'>11</a>
+<a name='L12'></a><a href='#L12'>12</a>
+<a name='L13'></a><a href='#L13'>13</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">import type { ChangePlan, EntityRecord } from '../domain';
+import type { IndexSnapshot } from '../indexing';
+import type { MarkdownChangePlanner, MarkdownPlanningPort } from './MarkdownChangePlanner';
+&nbsp;
+export interface ForeshadowingPatch { truth_event_ids?: string[]; plant_before?: string[]; advance_when?: string[]; reveal_after?: string[]; status?: 'planned' | 'planted' | 'advanced' | 'revealed' | 'abandoned' }
+const transitions: Record&lt;string, string[]&gt; = { planned: ['planted', 'abandoned'], planted: ['advanced', 'revealed', 'abandoned'], advanced: ['advanced', 'revealed', 'abandoned'], revealed: ['planted'], abandoned: ['planted'] };
+const yaml = (value: unknown) =&gt; JSON.stringify(value);
+function patchFrontmatter(content: string, patch: ForeshadowingPatch): string { const normalized = content.replace(/\r\n/g, '\n'); const end = normalized.startsWith('---\n') ? normalized.indexOf('\n---', 4) : -1; if (end &lt; 0) throw new Error('INVALID_FORESHADOWING_FRONTMATTER'); const lines = normalized.slice(4, end).split('\n'); const pending = new Set(Object.keys(patch)); const output = lines.map(line =&gt; { const key = line.match(/^([\w-]+):/)?.[1]; if (!key || !(key in patch)) return line; pending.delete(key); return `${key}: ${yaml(patch[key as keyof ForeshadowingPatch])}`; }); for (const key of [...pending].sort()) output.push(`${key}: ${yaml(patch[key as keyof ForeshadowingPatch])}`); return `---\n${output.join('\n')}\n---${normalized.slice(end + 4)}`; }
+export class ForeshadowingCommandService {
+	constructor(private snapshotProvider: () =&gt; IndexSnapshot | undefined, private port: MarkdownPlanningPort, private planner: MarkdownChangePlanner) {}
+	async planUpdate(key: string, patch: ForeshadowingPatch, requestedAt = new Date().toISOString()): Promise&lt;ChangePlan&gt; { const snapshot = this.snapshotProvider(); const record: EntityRecord | undefined = snapshot?.byKey.get(key<span class="branch-0 cbranch-no" title="branch not covered" >) || snapshot?.idRegistry.resolve(key); i</span>f (!snapshot) <span class="branch-0 cbranch-no" title="branch not covered" >throw new Error('INDEX_UNAVAILABLE'); i</span>f (record?.type !== 'foreshadowing' || record.data.legacyKind) throw new Error('FORESHADOWING_NOT_WRITABLE'); const status = typeof record.data.status === 'string' ? record.data.<span class="branch-0 cbranch-no" title="branch not covered" >status : 'planned'; i</span>f (patch.status &amp;&amp; !transitions[status]?.includes(patch.status)) throw new Error('FORESHADOWING_TRANSITION_NOT_ALLOWED'); const source = await this.port.read(record.source.path); if (!source) throw new Error('FORESHADOWING_SOURCE_NOT_FOUND'); return this.planner.plan({ type: 'update-entity-fields', actor: 'author', requestedAt, targetKeys: [record.<span class="branch-0 cbranch-no" title="branch not covered" >id || record.key]</span>, payload: { mutations: [{ path: record.source.path, operation: 'modify', content: patchFrontmatter(source.content, patch) }] } }, snapshot.version); }
+}
+&nbsp;</pre></td></tr></table></pre>
+
+                <div class='push'></div><!-- for sticky footer -->
+            </div><!-- /wrapper -->
+            <div class='footer quiet pad2 space-top1 center small'>
+                Code coverage generated by
+                <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
+                at 2026-09-11T13:39:35.462Z
+            </div>
+        <script src="../../prettify.js"></script>
+        <script>
+            window.onload = function () {
+                prettyPrint();
+            };
+        </script>
+        <script src="../../sorter.js"></script>
+        <script src="../../block-navigation.js"></script>
+    </body>
+</html>
+    

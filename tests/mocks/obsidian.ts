@@ -90,6 +90,29 @@ export function normalizePath(path: string): string {
 	return path.replace(/\\/g, '/').replace(/\/+/g, '/').replace(/^\.\//, '');
 }
 
+const parseYamlScalar = (value: string): unknown => {
+	const trimmed = value.trim();
+	if (!trimmed) return {};
+	try { return JSON.parse(trimmed); } catch { return trimmed.replace(/^(["'])(.*)\1$/, '$2'); }
+};
+
+export function parseYaml(source: string): unknown {
+	const root: Record<string, unknown> = {};
+	let nested: Record<string, unknown> | undefined;
+	for (const line of source.replace(/\r\n/g, '\n').split('\n')) {
+		if (!line.trim() || line.trimStart().startsWith('#')) continue;
+		const child = line.match(/^\s{2,}([^:]+):\s*(.*)$/);
+		if (child && nested) { nested[child[1].trim().replace(/^(["'])(.*)\1$/, '$2')] = parseYamlScalar(child[2]); continue; }
+		const field = line.match(/^([^:]+):\s*(.*)$/);
+		if (!field) throw new Error('Invalid YAML');
+		const key = field[1].trim();
+		const value = field[2];
+		if (!value.trim()) { nested = {}; root[key] = nested; }
+		else { root[key] = parseYamlScalar(value); nested = undefined; }
+	}
+	return root;
+}
+
 if (typeof Element !== 'undefined') {
 	const proto = Element.prototype as any;
 	if (!proto.addClass) {

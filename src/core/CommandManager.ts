@@ -23,6 +23,12 @@ import { isSelectionEligibleForAnnotate } from '../utils/proofreadingHelpers';
 import { splitChapterAtCursor } from '../services/ChapterSplitter';
 import { ChapterSplitCollisionModal } from '../ui/ChapterSplitCollisionModal';
 
+function stringProperty(value: unknown, key: string): string | undefined {
+	if (!value || typeof value !== 'object') return undefined;
+	const candidate = (value as Record<string, unknown>)[key];
+	return typeof candidate === 'string' ? candidate : undefined;
+}
+
 function getSelectedOrCursorWord(editor: {
 	getSelection: () => string;
 	getCursor: () => { line: number; ch: number };
@@ -109,28 +115,28 @@ export class CommandManager {
 			id: 'toggle-writing-status-view',
 			name: t('command.toggle-status-view'),
 			icon: 'bar-chart-2',
-			editorCallback: () => { void this.plugin.toggleStatusView(); }
+			callback: () => { void this.plugin.toggleStatusView(); }
 		});
 
 		this.plugin.addCommand({
 			id: 'toggle-foreshadowing-view',
 			name: t('command.toggle-foreshadowing-view'),
 			icon: 'bookmark',
-			editorCallback: () => { void this.plugin.toggleForeshadowingView(); }
+			callback: () => { void this.plugin.toggleForeshadowingView(); }
 		});
 
 		this.plugin.addCommand({
 			id: 'toggle-timeline-view',
 			name: t('command.toggle-timeline-view'),
 			icon: 'git-commit',
-			editorCallback: () => { void this.plugin.toggleTimelineView(); }
+			callback: () => { void this.plugin.toggleTimelineView(); }
 		});
 
 		this.plugin.addCommand({
 			id: 'toggle-workbench-view',
 			name: t('command.toggle-workbench-view'),
 			icon: 'laptop',
-			editorCallback: () => {
+			callback: () => {
 				void this.plugin.viewManager.toggleView('webnovel-workbench');
 			}
 		});
@@ -139,7 +145,7 @@ export class CommandManager {
 			id: 'toggle-corkboard-view',
 			name: t('command.open-corkboard'),
 			icon: 'library',
-			editorCallback: () => {
+			callback: () => {
 				void this.plugin.viewManager.toggleView('webnovel-corkboard');
 			}
 		});
@@ -148,7 +154,7 @@ export class CommandManager {
 			id: 'toggle-lore-overview-view',
 			name: t('command.open-lore-overview'),
 			icon: 'book-marked',
-			editorCallback: () => {
+			callback: () => {
 				void this.plugin.viewManager.toggleView('webnovel-lore-overview');
 			}
 		});
@@ -282,9 +288,13 @@ export class CommandManager {
 			id: 'create-next-chapter',
 			name: t('command.create-next-chapter'),
 			icon: 'file-plus',
-			editorCallback: async (editor, view) => {
-				const currentFile = view.file;
-				if (!currentFile) return;
+			callback: async () => {
+				const view = this.plugin.app.workspace.getActiveViewOfType(MarkdownView);
+				const currentFile = view?.file;
+				if (!view || !(currentFile instanceof TFile)) {
+					new Notice(t('notice.chapter-command-requires-editor'));
+					return;
+				}
 
 				const folder = currentFile.parent;
 				const siblingNames = folder
@@ -344,12 +354,17 @@ export class CommandManager {
 			id: 'split-chapter-at-cursor',
 			name: t('command.split-chapter-at-cursor'),
 			icon: 'scissors',
-			editorCheckCallback: (checking, editor, view) => {
-				if (!(view instanceof MarkdownView)) return false;
-				if (checking) return true;
+			callback: () => {
+				const view = this.plugin.app.workspace.getActiveViewOfType(MarkdownView);
+				const editor = view?.editor;
+				if (!view || !editor || !(view.file instanceof TFile)) {
+					new Notice(t('notice.chapter-command-requires-editor'));
+					return;
+				}
 
 				void (async () => {
 					try {
+						const runtime = this.plugin.services?.getOptional('ConsoleIndexRuntime');
 						await splitChapterAtCursor({
 							app: this.plugin.app,
 							view,
@@ -362,7 +377,19 @@ export class CommandManager {
 								this.plugin.fileExplorerPatcher?.refreshManually();
 							},
 							writingJourneyService: this.plugin.writingJourneyService,
-							plugin: this.plugin
+							plugin: this.plugin,
+							allocateChapterId: () => {
+								const ids = new Set(runtime?.getIndex()?.getSnapshot()?.idRegistry.byId.keys() || []);
+								for (const file of this.plugin.app.vault.getMarkdownFiles()) {
+									const frontmatter = this.plugin.app.metadataCache.getFileCache(file)?.frontmatter;
+									for (const key of ['id', 'ID', '永久ID', '永久_id']) {
+										const rawId = stringProperty(frontmatter, key);
+										if (rawId) ids.add(rawId);
+									}
+								}
+								return ChapterSorter.reserveNextChapterId(ids);
+							},
+							onStableAnchorImpact: (impact) => Logger.info('[ChapterSplitter] Stable anchor impact:', impact)
 						});
 					} catch (err) {
 						Logger.error('[CommandManager] Unexpected error splitting chapter:', err);
@@ -370,7 +397,6 @@ export class CommandManager {
 					}
 				})();
 
-				return true;
 			}
 		});
 
@@ -671,7 +697,7 @@ export class CommandManager {
 			id: 'open-creative-homepage',
 			name: t('command.open-creative-homepage'),
 			icon: 'home',
-			editorCallback: () => {
+			callback: () => {
 				const file = this.plugin.homepageManager?.getHomepageFile();
 				if (file) {
 					void this.plugin.app.workspace.getLeaf(false).openFile(file);

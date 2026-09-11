@@ -8,12 +8,12 @@ describe('DashboardQuery/Page', () => {
 	it('shows configured focus, cursor order, chapter aggregate, health and action placeholders', () => {
 		const model = new DashboardQuery(() => undefined).execute(null);
 		expect(model.configured).toBe(false);
-		expect(model).toMatchObject({ indexStatus: 'error', healthCount: 0, actionGroups: { now: [], missed: [], upcoming: [], later: [] } });
+		expect(model).toMatchObject({ indexStatus: 'unconfigured', availability: { status: 'unconfigured' }, healthCount: 0, actionGroups: { now: [], missed: [], upcoming: [], later: [], needs_confirmation: [] } });
 	});
 
 	it('renders configured and empty states in stable action order', () => {
 		const chapter = record('chapter', 'CH-0001', { title: '第一章' });
-		const model = new DashboardQuery(() => snapshot(chapter)).execute({ schemaVersion: 1, currentFocus: 'CH-0001', storylineCursors: { 主线: 'EVT-0001' } });
+		const model = new DashboardQuery(() => snapshot(chapter), () => ({ status: 'ready', code: 'INDEX_READY', projectId: 'p1', message: 'ready', retryable: false, suggestedActions: [], snapshotVersion: 's1', recordCount: 1 })).execute({ schemaVersion: 1, currentFocus: 'CH-0001', storylineCursors: { 主线: 'EVT-0001' } });
 		expect(model.chapterWorkspace?.chapter).toBe(chapter);
 		const root = new FakeElement();
 		renderDashboardPage(root as unknown as HTMLElement, model);

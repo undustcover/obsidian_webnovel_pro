@@ -21,6 +21,7 @@ export class EntityIndexService {
 	private contributions = new Map<string, EntityRecord[]>();
 	private stateListeners = new Set<(state: IndexServiceState) => void>();
 	private snapshotListeners = new Set<(snapshot: IndexSnapshot) => void>();
+	private disposed = false;
 
 	constructor(
 		private sourcePort: IndexSourcePort,
@@ -29,8 +30,14 @@ export class EntityIndexService {
 		private yieldControl: () => Promise<void> = () => new Promise(resolve => window.setTimeout(resolve, 0)),
 	) {}
 
-	onState(listener: (state: IndexServiceState) => void): () => void { this.stateListeners.add(listener); return () => this.stateListeners.delete(listener); }
-	onSnapshot(listener: (snapshot: IndexSnapshot) => void): () => void { this.snapshotListeners.add(listener); return () => this.snapshotListeners.delete(listener); }
+	onState(listener: (state: IndexServiceState) => void): () => void { if (this.disposed) return () => undefined; this.stateListeners.add(listener); return () => this.stateListeners.delete(listener); }
+	onSnapshot(listener: (snapshot: IndexSnapshot) => void): () => void { if (this.disposed) return () => undefined; this.snapshotListeners.add(listener); return () => this.snapshotListeners.delete(listener); }
+	dispose(): void {
+		if (this.disposed) return;
+		this.disposed = true;
+		this.stateListeners.clear();
+		this.snapshotListeners.clear();
+	}
 	getState(): IndexServiceState { return this.state; }
 	getSnapshot(): IndexSnapshot | undefined { return this.snapshot; }
 	parseSource(source: AdapterSource): EntityRecord[] { return this.adapters.parse(source); }

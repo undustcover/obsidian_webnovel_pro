@@ -1,4 +1,5 @@
 # Obsidian 用户数据
+.obsidian/
 data.json
 history-data.json
 cache-data.json
@@ -30,6 +31,7 @@ desktop.ini
 /dict/
 
 # 临时文件
+.test-tmp-*/
 *.jpg
 *.png
 *.gif

@@ -17,7 +17,10 @@ export function renderDashboardPage(container: HTMLElement, model: DashboardMode
 	for (const [key, title] of DASHBOARD_ACTION_SECTIONS) {
 		const card = container.createDiv({ cls: 'webnovel-console__dashboard-card' });
 		new Setting(card).setName(title).setHeading();
-		card.createDiv({ text: model.actionGroups[key].join('；') || '暂无行动项' });
+		const actions = model.actionGroups[key];
+		if (!actions.length) card.createDiv({ text: '暂无行动项' });
+		for (const action of actions) card.createDiv({ text: `${action.title} · ${action.source} · ${action.reason}${action.anchorIds.length ? ` · 锚点 ${action.anchorIds.join(', ')}` : ''}` });
 	}
+	if (model.actionGroups.needs_confirmation.length) container.createDiv({ cls: 'webnovel-console__warning', text: `${model.actionGroups.needs_confirmation.length} 个行动项的锚点需要作者确认。` });
 	container.createDiv({ cls: 'webnovel-console__status', text: `索引：${model.indexStatus} · 健康问题：${model.healthCount}` });
 }

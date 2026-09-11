@@ -114,6 +114,20 @@ describe('path utils - findBookRoot', () => {
 		// 它应该返回 novelFolder 的 path
 		expect(findBookRoot(app, plugin, file)).toBe('某工作区/某小说');
 	});
+
+	it('优先使用 V0.21 Console 项目的稳定根目录', () => {
+		const app = createMockApp({});
+		const plugin = createMockPlugin({
+			consoleProjects: [{ root: '小说库/雾港纪事', directories: { lore: '设定系统' } }]
+		});
+		const projectFolder = new MockFolder('小说库/雾港纪事', '雾港纪事');
+		const volumeFolder = new MockFolder('小说库/雾港纪事/正文/第一卷', '第一卷');
+		volumeFolder.parent = projectFolder;
+		const file = new MockFile('小说库/雾港纪事/正文/第一卷/第一章.md', '第一章.md');
+		file.parent = volumeFolder;
+
+		expect(findBookRoot(app, plugin, file, true)).toBe('小说库/雾港纪事');
+	});
 });
 
 describe('path utils - getCurrentBookContext', () => {

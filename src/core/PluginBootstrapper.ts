@@ -338,7 +338,7 @@ export class PluginBootstrapper {
 			this.services.register('ConsoleConfirmationTokens', tokens);
 			this.services.register('ConsoleMarkdownChangePlanner', planner);
 			this.services.register('ConsoleTransactionExecutor', executor);
-			this.services.register('ConsoleApplication', new ConsoleApplication(runtime, planner, executor, tokens, filePort));
+			this.services.register('ConsoleApplication', new ConsoleApplication(runtime, planner, executor, tokens, filePort, audit));
 		} catch (error) {
 			Logger.error('[NovelConsole] Service registration failed; continuing without Console.', error);
 		}

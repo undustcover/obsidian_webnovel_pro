@@ -4,6 +4,7 @@ import type { WebNovelAssistantPlugin } from '../types/plugin';
 import { getDefaultFileName, getLoreLabel } from '../i18n/data-keys';
 import { findBookRoot, getCandidateNames, isCandidateSubpath } from '../utils/path';
 import { t } from '../i18n';
+import { ENTITY_ID_PREFIX, type EntityType } from '../console/domain';
 
 export interface LoreEntry {
 	file: TFile;
@@ -412,7 +413,12 @@ export class CharacterManager {
 	 * 检查路径是否在设定文件夹内（支持多语言文件夹名）
 	 */
 	public getLoreCandidates(): Set<string> {
-		return getCandidateNames(this.plugin.settings.loreFolderName, 'loreFolderName');
+		const candidates = getCandidateNames(this.plugin.settings.loreFolderName, 'loreFolderName');
+		for (const project of this.plugin.settings.consoleProjects || []) {
+			const loreDirectory = project?.directories?.lore?.trim();
+			if (loreDirectory) candidates.add(loreDirectory.replace(/^\/+|\/+$/g, ''));
+		}
+		return candidates;
 	}
 
 	/**
@@ -744,8 +750,12 @@ export class CharacterManager {
 		}
 
 		const level2Headings = headings.filter(h => h.level === 2);
+		const fm = fileCache?.frontmatter;
+		// V0.21 正式实体文件用 frontmatter type + id 标识。文件内的 H2/H3 是内容结构，
+		// 不能再被误拆成多个设定；只有没有正式实体标识的旧合集才按 H2 解析。
+		const isCanonicalFileEntity = typeof fm?.['type'] === 'string' && typeof fm?.['id'] === 'string';
 
-		if (level2Headings.length > 0) {
+		if (level2Headings.length > 0 && !isCanonicalFileEntity) {
 			for (let i = 0; i < headings.length; i++) {
 				const heading = headings[i];
 				if (heading.level !== 2) continue;
@@ -776,7 +786,6 @@ export class CharacterManager {
 			if (fileEntryName) {
 				addEntry(fileEntryName, { file, heading: fileEntryName });
 
-				const fm = fileCache?.frontmatter;
 				if (fm) {
 					const rawAliases = (fm['aliases'] ?? fm['alias'] ?? fm['别名']) as unknown;
 					if (Array.isArray(rawAliases)) {
@@ -908,8 +917,45 @@ export class CharacterManager {
 		}
 	}
 
+	private getPreferredLoreFolderName(bookPath: string): string {
+		const normalizedBookPath = bookPath === '/' ? '' : bookPath.replace(/^\/+|\/+$/g, '');
+		const project = (this.plugin.settings.consoleProjects || []).find(candidate =>
+			candidate.root.replace(/^\/+|\/+$/g, '') === normalizedBookPath
+		);
+		return project?.directories?.lore?.trim()
+			|| this.plugin.settings.loreFolderName
+			|| getDefaultFileName('loreFolderName');
+	}
+
+	private getLoreEntityType(category: string): EntityType {
+		const rootCategory = category.replace(/\\/g, '/').split('/')[0].replace(/\.md$/i, '').trim().toLowerCase();
+		const categoryTypes: Record<string, EntityType> = {
+			'世界观': 'world', 'world': 'world', 'worldbuilding': 'world',
+			'人物': 'character', '角色': 'character', 'characters': 'character', 'character': 'character',
+			'组织势力': 'organization', '组织': 'organization', 'organizations': 'organization', 'organization': 'organization',
+			'地点场所': 'location', '地点': 'location', 'locations': 'location', 'location': 'location',
+			'道具技术': 'item', '道具': 'item', 'items': 'item', 'item': 'item',
+			'能力体系': 'ability', '能力': 'ability', 'abilities': 'ability', 'ability': 'ability',
+			'术语表': 'term', '术语': 'term', 'glossary': 'term', 'terms': 'term', 'term': 'term'
+		};
+		return categoryTypes[rootCategory] || 'world';
+	}
+
+	private getNextLoreEntityId(bookPath: string, type: EntityType): string {
+		const prefix = ENTITY_ID_PREFIX[type] || 'WLD';
+		let max = 0;
+		for (const file of this.getLoreFiles(bookPath)) {
+			const id: unknown = this.app.metadataCache.getFileCache(file)?.frontmatter?.['id'];
+			if (typeof id !== 'string') continue;
+			const match = id.match(new RegExp(`^${prefix}-(\\d+)$`));
+			if (match) max = Math.max(max, Number(match[1]));
+		}
+		return `${prefix}-${String(max + 1).padStart(4, '0')}`;
+	}
+
 	/**
-	 * 创建或向已有的设定分类文件中追加新的设定条目，并构建跨设定关联（支持多层子文件夹路径）
+	 * 按 V0.21 正式模型创建设定：分类是目录，每个设定是独立 Markdown 文件。
+	 * 旧版“分类文档 + H2 词条”仍由解析器只读兼容，但不再作为新增写入格式。
 	 */
 	public async createLoreEntry(
 		bookPath: string,
@@ -921,7 +967,7 @@ export class CharacterManager {
 		loreRelations: Array<{ label: string; target: string }>
 	): Promise<boolean> {
 		let loreFolder = this.findLoreFolder(bookPath);
-		const currentLoreName = this.plugin.settings.loreFolderName || getDefaultFileName('loreFolderName');
+		const currentLoreName = this.getPreferredLoreFolderName(bookPath);
 		const expectedLorePath = bookPath === '/' ? currentLoreName : bookPath + '/' + currentLoreName;
 
 		if (!loreFolder) {
@@ -940,8 +986,10 @@ export class CharacterManager {
 		}
 
 		const loreFolderPath = loreFolder instanceof Object && 'path' in loreFolder ? (loreFolder as { path: string }).path : expectedLorePath;
-		const normalizedCategory = loreCategory.replace(/\.md$/i, '').trim();
-		const filePath = `${loreFolderPath}/${normalizedCategory}.md`;
+		const normalizedCategory = loreCategory.replace(/\\/g, '/').replace(/\.md$/i, '').replace(/^\/+|\/+$/g, '').trim();
+		const normalizedName = loreName.trim().replace(/[\\/:*?"<>|]/g, ' ').trim();
+		if (!normalizedCategory || !normalizedName) return false;
+		const filePath = `${loreFolderPath}/${normalizedCategory}/${normalizedName}.md`;
 
 		const lastSlash = filePath.lastIndexOf('/');
 		if (lastSlash !== -1) {
@@ -949,25 +997,38 @@ export class CharacterManager {
 			await this.ensureFolderRecursive(parentDirPath);
 		}
 
-		let targetFile = this.app.vault.getAbstractFileByPath(filePath);
-		if (!(targetFile instanceof TFile)) {
-			targetFile = null;
+		const targetFile = this.app.vault.getAbstractFileByPath(filePath);
+		if (targetFile) {
+			new Notice(t('modal.lore-file-exists'));
+			return false;
 		}
 
-		let contentToAppend = `\n\n## ${loreName.trim()}\n\n`;
-		if (loreAliases.trim()) {
-			contentToAppend += `**${getLoreLabel('alias')}**：${loreAliases.trim()}\n`;
-		}
-		if (loreType.trim()) {
-			contentToAppend += `**${getLoreLabel('type')}**：${loreType.trim()}\n`;
-		}
+		const entityType = this.getLoreEntityType(normalizedCategory);
+		const aliases = loreAliases.split(/[,，、/|;；]/).map(value => value.trim()).filter(Boolean);
+		const frontmatter = [
+			'---',
+			`type: ${entityType}`,
+			`id: ${this.getNextLoreEntityId(bookPath, entityType)}`,
+			`title: ${JSON.stringify(loreName.trim())}`,
+			`aliases: ${JSON.stringify(aliases)}`,
+			'canon: canon',
+			'lifecycle_status: active',
+			'context_scope: current',
+			'review_status: pending_review',
+			...(loreType.trim() ? [`lore_type: ${JSON.stringify(loreType.trim())}`] : []),
+			'---',
+			'',
+			`# ${loreName.trim()}`,
+			''
+		];
+		let content = `${frontmatter.join('\n')}\n`;
 		if (loreDescription.trim()) {
-			contentToAppend += `${loreDescription.trim()}\n`;
+			content += `${loreDescription.trim()}\n`;
 		}
 
 		const validRelations = loreRelations.filter(r => r.label.trim() && r.target.trim());
 		if (validRelations.length > 0) {
-			contentToAppend += `\n### ${getLoreLabel('relation')}\n`;
+			content += `\n## ${getLoreLabel('relation')}\n`;
 			for (const rel of validRelations) {
 				const targetStrRaw = rel.target.trim();
 				const rawTargets = targetStrRaw.split(/[,，、]/).map(t => t.trim()).filter(Boolean);
@@ -975,16 +1036,6 @@ export class CharacterManager {
 					if (t.startsWith('[[')) return t;
 					const entry = this.getCharacterFile(bookPath, t);
 					if (entry) {
-						// 检查目标设定是否与当前新建设定处于同一个文件
-						const normEntryPath = entry.file.path.replace(/\\/g, '/').replace(/^\/+/, '');
-						const normCurrentPath = filePath.replace(/\\/g, '/').replace(/^\/+/, '');
-						const isSameFile = (targetFile && entry.file === targetFile) || normEntryPath === normCurrentPath;
-
-						if (isSameFile) {
-							// 同文件词条：直接使用同文档标题跳转 [[#标题]] 或 [[#标题|别名]]，无需冗余的文件名前缀
-							return t === entry.heading ? `[[#${entry.heading}]]` : `[[#${entry.heading}|${t}]]`;
-						}
-
 						// 跨文件词条：通过 Obsidian metadataCache.fileToLinktext 生成精准路径（支持嵌套文件夹防重名）
 						const linkPath = (this.app?.metadataCache?.fileToLinktext
 							? this.app.metadataCache.fileToLinktext(entry.file, filePath, true)
@@ -998,19 +1049,15 @@ export class CharacterManager {
 						// 跨文件多词条大纲模式：[[文件路径#标题|显示名]]
 						return `[[${linkPath}#${entry.heading}|${t}]]`;
 					} else {
-						return `[[#${t}]]`;
+						return `[[${t}]]`;
 					}
 				});
 				const targetStr = formattedTargets.join('、');
-				contentToAppend += `**${rel.label.trim()}**：${targetStr}\n`;
+				content += `**${rel.label.trim()}**：${targetStr}\n`;
 			}
 		}
 
-		if (targetFile) {
-			await this.app.vault.append(targetFile, contentToAppend);
-		} else {
-			await this.app.vault.create(filePath, contentToAppend.trimStart());
-		}
+		await this.app.vault.create(filePath, content);
 
 		await this.rebuildCache();
 		new Notice(t('modal.lore-saved'));

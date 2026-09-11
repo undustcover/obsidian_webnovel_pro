@@ -65,6 +65,14 @@ describe('CharacterManager', () => {
             expect(manager.isLorePath('Book1', 'Book2/Lore')).toBe(false);
             expect(manager.isLorePath('Book1', 'Book2/Lore/Characters')).toBe(false);
         });
+
+		it('should include the V0.21 lore directory configured for console projects', () => {
+			mockPlugin.settings.consoleProjects = [{ root: 'Book1', directories: { lore: '设定系统' } }];
+			const manager = new CharacterManager(mockApp, mockPlugin);
+
+			expect(manager.isLorePath('Book1', 'Book1/设定系统/人物')).toBe(true);
+			expect(manager.getLoreCandidates()).toContain('设定系统');
+		});
     });
 
     describe('Initialization & Caching', () => {
@@ -423,6 +431,32 @@ LinLei is a dragon warrior.`;
             const success = await manager.updateLoreContent(entry, 'Updated warrior story.');
             expect(success).toBe(true);
         });
+
+		it('should treat headings inside a canonical V0.21 entity file as content structure', async () => {
+			const manager = new CharacterManager(mockApp, mockPlugin);
+			manager.getBookPathForFile = vi.fn().mockReturnValue('Book1');
+			manager.isLorePath = vi.fn().mockReturnValue(true);
+
+			const mockFile = { basename: '林澈', path: 'Book1/设定系统/人物/林澈.md', parent: { path: 'Book1/设定系统/人物' } };
+			mockApp.metadataCache.getFileCache = vi.fn().mockReturnValue({
+				frontmatter: { type: 'character', id: 'CHR-0001', aliases: ['阿澈'] },
+				headings: [
+					{ heading: '林澈', level: 1, position: { end: { line: 9 }, start: { line: 9 } } },
+					{ heading: '外貌', level: 2, position: { end: { line: 11 }, start: { line: 11 } } },
+					{ heading: '人物弧光', level: 2, position: { end: { line: 14 }, start: { line: 14 } } }
+				]
+			});
+			mockApp.vault.cachedRead = vi.fn().mockResolvedValue('---\ntype: character\nid: CHR-0001\naliases: [阿澈]\n---\n# 林澈\n## 外貌\n...\n## 人物弧光\n...');
+
+			const targetCache = new Map();
+			const targetLowerMap = new Map();
+			await manager['addFileToCacheIfValidInto'](mockFile as any, targetCache, targetLowerMap);
+
+			const bookCache = targetCache.get('Book1');
+			expect([...bookCache.keys()]).toEqual(['林澈', '阿澈']);
+			expect(bookCache.has('外貌')).toBe(false);
+			expect(bookCache.has('人物弧光')).toBe(false);
+		});
     });
 
     describe('Nested Folder Operations', () => {
@@ -461,9 +495,10 @@ LinLei is a dragon warrior.`;
             );
 
             expect(result).toBe(true);
-            expect(createdFolders).toContain('Book1/Lore/Characters');
-            expect(createdFolders).toContain('Book1/Lore/Characters/Major');
-            expect(createdFiles).toContain('Book1/Lore/Characters/Major/Protagonist.md');
+			expect(createdFolders).toContain('Book1/Lore/Characters');
+			expect(createdFolders).toContain('Book1/Lore/Characters/Major');
+			expect(createdFolders).toContain('Book1/Lore/Characters/Major/Protagonist');
+			expect(createdFiles).toContain('Book1/Lore/Characters/Major/Protagonist/LinLei.md');
         });
 
         it('should format same-file and cross-file relation links cleanly in createLoreEntry', async () => {
@@ -526,10 +561,12 @@ LinLei is a dragon warrior.`;
             );
 
             expect(result).toBe(true);
-            // Same file heading: [[#ZhangSan]] (no file prefix!)
-            expect(createdContent).toContain('**朋友**：[[#ZhangSan]]');
-            // Same file alias: [[#ZhangSan|SanGe]] (no file prefix!)
-            expect(createdContent).toContain('**义弟**：[[#ZhangSan|SanGe]]');
+			expect(createdContent).toContain('type: character');
+			expect(createdContent).toContain('id: CHR-0001');
+			expect(createdContent).toContain('# LiSi');
+			// Existing legacy multi-entry targets retain precise anchors.
+			expect(createdContent).toContain('**朋友**：[[Characters#ZhangSan|ZhangSan]]');
+			expect(createdContent).toContain('**义弟**：[[Characters#ZhangSan|SanGe]]');
             // Cross-file single file with nested path: [[Characters/Major/Hero]]
             expect(createdContent).toContain('**偶像**：[[Characters/Major/Hero]]');
             // Cross-file single file alias with nested path: [[Characters/Major/Hero|DragonLord]]
@@ -538,8 +575,8 @@ LinLei is a dragon warrior.`;
             expect(createdContent).toContain('**同门**：[[Characters/Minor/SideCharacters#WangWu|WangWu]]');
             // Cross-file multi-entry alias with nested path: [[Characters/Minor/SideCharacters#WangWu|LaoWang]]
             expect(createdContent).toContain('**师兄**：[[Characters/Minor/SideCharacters#WangWu|LaoWang]]');
-            // Unknown: [[#UnknownPerson]]
-            expect(createdContent).toContain('**未名**：[[#UnknownPerson]]');
+			// Unknown targets are links to prospective standalone files.
+			expect(createdContent).toContain('**未名**：[[UnknownPerson]]');
             // Explicit link: [[CustomLink]]
             expect(createdContent).toContain('**手动**：[[CustomLink]]');
         });

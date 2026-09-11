@@ -54,3 +54,29 @@ export interface EventData {
 	longTermImpacts: string[];
 	evidenceFiles: string[];
 }
+
+export type EventStateField = 'eventStatus' | 'narrativeStatus' | 'readerState';
+
+const EVENT_TRANSITIONS: Readonly<Record<EventStatus, readonly EventStatus[]>> = Object.freeze({
+	planned: ['possible', 'occurring', 'occurred', 'cancelled', 'superseded'],
+	possible: ['planned', 'cancelled', 'superseded'],
+	occurring: ['occurred', 'cancelled'],
+	occurred: ['superseded'],
+	cancelled: ['planned'],
+	superseded: ['planned'],
+});
+
+export function canTransitionEventStatus(from: EventStatus | 'unknown', to: EventStatus): boolean {
+	return from !== 'unknown' && EVENT_TRANSITIONS[from].includes(to);
+}
+
+export function canTransitionNarrativeStatus(from: NarrativeStatus | 'unknown', to: NarrativeStatus): boolean {
+	if (from === 'unknown' || from === to) return false;
+	if (to === 'published') return from !== 'published';
+	if (from === 'published') return to === 'written';
+	return Math.abs(NARRATIVE_STATUSES.indexOf(from) - NARRATIVE_STATUSES.indexOf(to)) === 1;
+}
+
+export function canTransitionReaderState(from: ReaderState | 'unknown', to: ReaderState): boolean {
+	return from !== to;
+}

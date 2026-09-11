@@ -26,4 +26,15 @@ describe('ProjectStateRepository', () => {
 		await expect(repository.planUpdate({ currentFocus: 'bad', storylineCursors: {} }, 'v1')).rejects.toThrow('INVALID_CURRENT_FOCUS');
 		await expect(repository.planUpdate({ currentFocus: 'CH-0001', storylineCursors: { '': 'bad' } }, 'v1')).rejects.toThrow('INVALID_STORYLINE_CURSOR');
 	});
+
+	it('clears focus as YAML null while preserving every storyline cursor', async () => {
+		const path = '作品/总控系统/当前阶段.md';
+		const content = '---\nschema_version: 1\ncurrent_focus: CH-0001\nstoryline_cursors:\n  "主线": EVT-0002\n  "支线": EVT-0003\n---\n';
+		const port = memoryPlanningPort({ [path]: content });
+		const repository = new ProjectStateRepository(createDefaultConsoleProject('作品'), port, new MarkdownChangePlanner(port));
+		const plan = await repository.planUpdate({ currentFocus: null, storylineCursors: { 主线: 'EVT-0002', 支线: 'EVT-0003' } }, 'v1');
+		expect(plan.command.targetKeys).toEqual(['CH-0001']);
+		expect(plan.files[0]?.content).toContain('current_focus: null');
+		expect(parseProjectState(plan.files[0]!.content!)).toEqual({ schemaVersion: 1, currentFocus: null, storylineCursors: { 主线: 'EVT-0002', 支线: 'EVT-0003' } });
+	});
 });

@@ -10,10 +10,18 @@ export type IndexFileEvent =
 
 export class IndexCoordinator {
 	private lastAffectedEntityKeys: readonly string[] = [];
+	private disposed = false;
 	constructor(private index: EntityIndexService) {}
 	getLastAffectedEntityKeys(): readonly string[] { return this.lastAffectedEntityKeys; }
+	dispose(): void {
+		if (this.disposed) return;
+		this.disposed = true;
+		this.lastAffectedEntityKeys = [];
+		this.index.dispose();
+	}
 
 	apply(project: ConsoleProjectConfig, event: IndexFileEvent): IndexSnapshot | undefined {
+		if (this.disposed) return undefined;
 		const before = this.index.getSnapshot();
 		const oldPath = event.type === 'rename' ? event.oldPath : event.type === 'delete' ? event.path : event.source.path;
 		const oldRecords = before?.records.filter(record => record.source.path === oldPath) || [];

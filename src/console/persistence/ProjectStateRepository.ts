@@ -5,11 +5,11 @@ import type { MarkdownChangePlanner } from './MarkdownChangePlanner';
 
 export interface ProjectState {
 	schemaVersion: 1;
-	currentFocus: string;
+	currentFocus: string | null;
 	storylineCursors: Record<string, string>;
 }
 
-export interface ProjectStateUpdate { currentFocus: string; storylineCursors: Record<string, string> }
+export interface ProjectStateUpdate { currentFocus: string | null; storylineCursors: Record<string, string> }
 
 const join = (...parts: string[]) => parts.filter(Boolean).join('/').replace(/\\/g, '/').replace(/\/+/g, '/').replace(/^\//, '');
 const unquote = (value: string): string => {
@@ -22,7 +22,7 @@ function parseProjectState(content: string): ProjectState {
 	const schema = lines.find(line => /^schema_version:/.test(line))?.split(':').slice(1).join(':').trim();
 	const focusLines = lines.filter(line => /^current_focus:/.test(line));
 	const focus = focusLines[0]?.split(':').slice(1).join(':').trim();
-	if (schema !== '1' || focusLines.length !== 1 || !focus) throw new Error('INVALID_PROJECT_STATE');
+	if (schema !== '1' || focusLines.length !== 1 || focus === undefined || (!focus && focus !== 'null')) throw new Error('INVALID_PROJECT_STATE');
 	const storylineCursors: Record<string, string> = {};
 	const start = lines.findIndex(line => /^storyline_cursors:\s*$/.test(line));
 	if (start >= 0) for (const line of lines.slice(start + 1)) {
@@ -30,11 +30,11 @@ function parseProjectState(content: string): ProjectState {
 		const match = line.match(/^\s{2,}([^:]+):\s*(.+)$/);
 		if (match) storylineCursors[unquote(match[1])] = unquote(match[2]);
 	}
-	return { schemaVersion: 1, currentFocus: unquote(focus), storylineCursors };
+	return { schemaVersion: 1, currentFocus: focus === 'null' ? null : unquote(focus), storylineCursors };
 }
 
 function validateUpdate(update: ProjectStateUpdate): void {
-	if (!/^[A-Z]+(?:-[A-Z]+)*-\d{4,}(?:-\d{2,})?$/.test(update.currentFocus)) throw new Error('INVALID_CURRENT_FOCUS');
+	if (update.currentFocus !== null && !/^[A-Z]+(?:-[A-Z]+)*-\d{4,}(?:-\d{2,})?$/.test(update.currentFocus)) throw new Error('INVALID_CURRENT_FOCUS');
 	for (const [storyline, eventId] of Object.entries(update.storylineCursors)) {
 		if (!storyline.trim() || !/^EVT-\d{4,}$/.test(eventId)) throw new Error('INVALID_STORYLINE_CURSOR');
 	}
@@ -42,7 +42,7 @@ function validateUpdate(update: ProjectStateUpdate): void {
 
 function renderProjectState(update: ProjectStateUpdate): string {
 	const cursors = Object.entries(update.storylineCursors).sort(([a], [b]) => a.localeCompare(b)).map(([storyline, eventId]) => `  ${JSON.stringify(storyline)}: ${eventId}`).join('\n');
-	return `---\ntype: project_state\nschema_version: 1\ncurrent_focus: ${update.currentFocus}\nstoryline_cursors:\n${cursors}\n---\n\n# 当前阶段\n`;
+	return `---\ntype: project_state\nschema_version: 1\ncurrent_focus: ${update.currentFocus ?? 'null'}\nstoryline_cursors:\n${cursors}\n---\n\n# 当前阶段\n`;
 }
 
 export class ProjectStateRepository {
@@ -62,13 +62,23 @@ export class ProjectStateRepository {
 	}
 
 	async planUpdate(update: ProjectStateUpdate, snapshotVersion: string, requestedAt = new Date().toISOString()): Promise<ChangePlan> {
-		if (!await this.port.read(this.path)) throw new Error('PROJECT_STATE_NOT_CONFIGURED');
-		return this.plan('update-project-state', 'modify', update, snapshotVersion, requestedAt);
+		const current = await this.read();
+		if (!current) throw new Error('PROJECT_STATE_NOT_CONFIGURED');
+		return this.plan('update-project-state', 'modify', update, snapshotVersion, requestedAt, [current.currentFocus, update.currentFocus].filter((value): value is string => Boolean(value)));
 	}
 
-	private async plan(type: string, operation: 'create' | 'modify', update: ProjectStateUpdate, snapshotVersion: string, requestedAt: string): Promise<ChangePlan> {
+	async planCursorUpdate(storyline: string, eventId: string, snapshotVersion: string, requestedAt = new Date().toISOString()): Promise<ChangePlan> {
+		const current = await this.read();
+		if (!current) throw new Error('PROJECT_STATE_NOT_CONFIGURED');
+		return this.plan('update-storyline-cursor', 'modify', {
+			currentFocus: current.currentFocus,
+			storylineCursors: { ...current.storylineCursors, [storyline]: eventId },
+		}, snapshotVersion, requestedAt);
+	}
+
+	private async plan(type: string, operation: 'create' | 'modify', update: ProjectStateUpdate, snapshotVersion: string, requestedAt: string, targetKeys = update.currentFocus ? [update.currentFocus] : []): Promise<ChangePlan> {
 		validateUpdate(update);
-		return this.planner.plan({ type, actor: 'author', requestedAt, targetKeys: [update.currentFocus], payload: { mutations: [{ path: this.path, operation, content: renderProjectState(update) }] } }, snapshotVersion);
+		return this.planner.plan({ type, actor: 'author', requestedAt, targetKeys: [...new Set(targetKeys)], payload: { mutations: [{ path: this.path, operation, content: renderProjectState(update) }] } }, snapshotVersion);
 	}
 }
 

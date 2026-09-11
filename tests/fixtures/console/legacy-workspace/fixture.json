@@ -1,0 +1,7 @@
+{
+  "fixtureVersion": 1,
+  "name": "legacy-workspace",
+  "projectRoot": "旧作",
+  "expectedLegacyKinds": ["chapter", "lore-h2", "timeline"]
+}
+

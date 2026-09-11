@@ -93,6 +93,28 @@
 	width: 100%;
 }
 
+.webnovel-console-project-settings__card {
+	margin: 12px 0;
+	padding: 8px 14px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 8px;
+	background: var(--background-secondary);
+}
+
+.webnovel-console-project-settings__card details,
+.webnovel-console-project-settings__advanced {
+	margin: 8px 0;
+	padding: 8px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 6px;
+}
+
+.webnovel-console-project-settings__error {
+	margin: -6px 0 8px;
+	color: var(--text-error);
+	font-size: var(--font-ui-smaller);
+}
+
 .webnovel-settings-rules-container {
 	width: 100%;
 }

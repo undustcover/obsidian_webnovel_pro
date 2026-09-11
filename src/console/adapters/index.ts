@@ -6,4 +6,5 @@ export * from './LegacyLoreAdapter';
 export * from './LegacyTimelineAdapter';
 export * from './LegacyForeshadowingAdapter';
 export * from './LegacyTimedTaskAdapter';
+export * from './ForeshadowingPropertiesAdapter';
 export * from './registry';

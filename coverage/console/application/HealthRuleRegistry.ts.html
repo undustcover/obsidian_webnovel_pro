@@ -1,0 +1,208 @@
+
+<!doctype html>
+<html lang="en">
+
+<head>
+    <title>Code coverage report for console/application/HealthRuleRegistry.ts</title>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="../../prettify.css" />
+    <link rel="stylesheet" href="../../base.css" />
+    <link rel="shortcut icon" type="image/x-icon" href="../../favicon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style type='text/css'>
+        .coverage-summary .sorter {
+            background-image: url(../../sort-arrow-sprite.png);
+        }
+    </style>
+</head>
+    
+<body>
+<div class='wrapper'>
+    <div class='pad1'>
+        <h1><a href="../../index.html">All files</a> / <a href="index.html">console/application</a> HealthRuleRegistry.ts</h1>
+        <div class='clearfix'>
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">100% </span>
+                <span class="quiet">Statements</span>
+                <span class='fraction'>37/37</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">73.17% </span>
+                <span class="quiet">Branches</span>
+                <span class='fraction'>60/82</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">100% </span>
+                <span class="quiet">Functions</span>
+                <span class='fraction'>5/5</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">100% </span>
+                <span class="quiet">Lines</span>
+                <span class='fraction'>37/37</span>
+            </div>
+        
+            
+        </div>
+        <p class="quiet">
+            Press <em>n</em> or <em>j</em> to go to the next uncovered block, <em>b</em>, <em>p</em> or <em>k</em> for the previous block.
+        </p>
+        <template id="filterTemplate">
+            <div class="quiet">
+                Filter:
+                <input type="search" id="fileSearch">
+            </div>
+        </template>
+    </div>
+    <div class='status-line high'></div>
+    <pre><table class="coverage">
+<tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
+<a name='L2'></a><a href='#L2'>2</a>
+<a name='L3'></a><a href='#L3'>3</a>
+<a name='L4'></a><a href='#L4'>4</a>
+<a name='L5'></a><a href='#L5'>5</a>
+<a name='L6'></a><a href='#L6'>6</a>
+<a name='L7'></a><a href='#L7'>7</a>
+<a name='L8'></a><a href='#L8'>8</a>
+<a name='L9'></a><a href='#L9'>9</a>
+<a name='L10'></a><a href='#L10'>10</a>
+<a name='L11'></a><a href='#L11'>11</a>
+<a name='L12'></a><a href='#L12'>12</a>
+<a name='L13'></a><a href='#L13'>13</a>
+<a name='L14'></a><a href='#L14'>14</a>
+<a name='L15'></a><a href='#L15'>15</a>
+<a name='L16'></a><a href='#L16'>16</a>
+<a name='L17'></a><a href='#L17'>17</a>
+<a name='L18'></a><a href='#L18'>18</a>
+<a name='L19'></a><a href='#L19'>19</a>
+<a name='L20'></a><a href='#L20'>20</a>
+<a name='L21'></a><a href='#L21'>21</a>
+<a name='L22'></a><a href='#L22'>22</a>
+<a name='L23'></a><a href='#L23'>23</a>
+<a name='L24'></a><a href='#L24'>24</a>
+<a name='L25'></a><a href='#L25'>25</a>
+<a name='L26'></a><a href='#L26'>26</a>
+<a name='L27'></a><a href='#L27'>27</a>
+<a name='L28'></a><a href='#L28'>28</a>
+<a name='L29'></a><a href='#L29'>29</a>
+<a name='L30'></a><a href='#L30'>30</a>
+<a name='L31'></a><a href='#L31'>31</a>
+<a name='L32'></a><a href='#L32'>32</a>
+<a name='L33'></a><a href='#L33'>33</a>
+<a name='L34'></a><a href='#L34'>34</a>
+<a name='L35'></a><a href='#L35'>35</a>
+<a name='L36'></a><a href='#L36'>36</a>
+<a name='L37'></a><a href='#L37'>37</a>
+<a name='L38'></a><a href='#L38'>38</a>
+<a name='L39'></a><a href='#L39'>39</a>
+<a name='L40'></a><a href='#L40'>40</a>
+<a name='L41'></a><a href='#L41'>41</a>
+<a name='L42'></a><a href='#L42'>42</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">21x</span>
+<span class="cline-any cline-yes">21x</span>
+<span class="cline-any cline-yes">13x</span>
+<span class="cline-any cline-yes">10x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">21x</span>
+<span class="cline-any cline-yes">21x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">21x</span>
+<span class="cline-any cline-yes">21x</span>
+<span class="cline-any cline-yes">21x</span>
+<span class="cline-any cline-yes">21x</span>
+<span class="cline-any cline-yes">21x</span>
+<span class="cline-any cline-yes">21x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">import { ENTITY_ID_PREFIX, hasValidIdShape, type DiagnosticRef, type EntityRecord } from '../domain';
+import type { IndexSnapshot } from '../indexing';
+import type { ProjectState, SuggestionDecisionEntry } from '../persistence';
+import { creativeTaskDataFromRecord, eventDataFromRecord } from '../persistence';
+import { EventGraph } from './EventGraph';
+import { ActionProjectionService } from './ActionProjectionService';
+import { ForeshadowingActionRules } from './ForeshadowingActionRules';
+&nbsp;
+export const STRUCTURE_RULE_IDS = ['STRUCT_ID_DUPLICATE', 'STRUCT_ID_MISSING', 'STRUCT_ID_TYPE_MISMATCH', 'STRUCT_ID_FORMAT_NONSTANDARD', 'STRUCT_WIKILINK_BROKEN', 'STRUCT_CORE_ORPHANED', 'STRUCT_DIRECTORY_STATUS_MISMATCH', 'STRUCT_CANON_REFERENCES_DEPRECATED', 'STRUCT_CONTEXT_SCOPE_LEAK', 'STRUCT_REVIEW_STALE', 'STRUCT_MANUSCRIPT_UNKNOWN_REFERENCE', 'STRUCT_FIELD_ALIAS_CONFLICT', 'STRUCT_ENUM_UNKNOWN'] as const;
+export const CONTINUITY_RULE_IDS = ['EVENT_TIME_MISSING', 'EVENT_TIME_CONFLICT', 'EVENT_DEPENDENCY_MISSING', 'EVENT_DEPENDENCY_CYCLE', 'EVENT_CURRENT_PREREQUISITE_MISSING', 'EVENT_CHAPTER_PREREQUISITE_UNMET', 'EVENT_CROSSLINE_JOIN_UNMET', 'MILESTONE_EVENT_MISSING', 'MILESTONE_DEPENDENCY_CYCLE', 'CONTINUITY_CHARACTER_LOCATION_CONFLICT', 'CONTINUITY_CHARACTER_STATE_REVIEW', 'CONTINUITY_ITEM_MULTIPLE_HOLDERS', 'CONTINUITY_ITEM_OWNERSHIP_REVIEW', 'CONTINUITY_KNOWLEDGE_REVIEW', 'CONTINUITY_CHAPTER_EVENT_MAPPING_BROKEN'] as const;
+export const PROGRESSION_RULE_IDS = ['PROG_FORESHADOWING_OVERDUE', 'PROG_FORESHADOWING_ANCHOR_PASSED', 'PROG_TASK_ANCHOR_PASSED', 'PROG_ACTIVATION_ANCHOR_INVALID', 'PROG_HIDDEN_HISTORY_TASK_ACTIVATED', 'PROG_SUGGESTION_IGNORED_RELEVANT'] as const;
+export const HEALTH_RULE_IDS = [...STRUCTURE_RULE_IDS, ...CONTINUITY_RULE_IDS, ...PROGRESSION_RULE_IDS] as const;
+const diagnostic = (record: EntityRecord, ruleId: typeof HEALTH_RULE_IDS[number], message: string, field?: string, value?: unknown): DiagnosticRef =&gt; ({ ruleId, severity: ruleId.startsWith('PROG_') ? 'suggestion' : 'warning', entityKey: record.<span class="branch-0 cbranch-no" title="branch not covered" >id || record.key, m</span>essage, evidence: [{ path: record.source.path, field, value }] });
+const ids = (value: unknown): string[] =&gt; Array.isArray(value) ? value.filter((item): item is string =&gt; typeof item === 'string') : [];
+&nbsp;
+export class HealthRuleRegistry {
+	evaluate(snapshot: IndexSnapshot, state: ProjectState | null = null, decisions: ReadonlyMap&lt;string, SuggestionDecisionEntry&gt; = new Map()): DiagnosticRef[] {
+		const result = [...snapshot.diagnostics.filter(item =&gt; (HEALTH_RULE_IDS as readonly string[]).includes(item.ruleId))]; const graph = new EventGraph(snapshot);
+		for (const cycle of graph.detectCycles()) for (const id of cycle.slice(0, -1)) { const record = snapshot.idRegistry.resolve(id); if (record) result.push(diagnostic(record, 'EVENT_DEPENDENCY_CYCLE', '事件依赖形成环', 'prerequisite_event_ids', cycle)); }
+		for (const record of snapshot.records) {
+			this.structureRules(record, snapshot, result);
+			if (record.type === 'event') this.eventRules(record, snapshot, state, result);
+			else if (record.type === 'milestone') { const required = ids((record.data.completion as Record&lt;string, unknown&gt; | undefined)?.required_event_ids || (record.data.<span class="branch-0 cbranch-no" title="branch not covered" >completion as Record&lt;string, unknown&gt; | undefined)?.requiredEventIds)</span>; for (const id of required) if (!snapshot.idRegistry.resolve(id)) <span class="branch-0 cbranch-no" title="branch not covered" >result.push(diagnostic(record, 'MILESTONE_EVENT_MISSING', '里程碑引用的事件不存在', 'completion', id)); c</span>onst cycleIds = new Set(graph.detectCycles().flat()); if (required.some(id =&gt; cycleIds.has(id))) result.push(diagnostic(record, 'MILESTONE_DEPENDENCY_CYCLE', '里程碑依赖的事件存在环', 'completion', required)); }
+			else if (record.type === 'character') { const location = record.data.current_location_id; if (typeof location === 'string' &amp;&amp; !snapshot.idRegistry.resolve(location)) result.push(diagnostic(record, 'CONTINUITY_CHARACTER_LOCATION_CONFLICT', '人物当前位置不存在', 'current_location_id', location)); if (!record.data.story_status) result.push(diagnostic(record, 'CONTINUITY_CHARACTER_STATE_REVIEW', '人物故事状态需要复核', 'story_status')); }
+			else if (record.type === 'item') { const holders = ids(record.data.current_holder_ids); if (holders.length &gt; 1) result.push(diagnostic(record, 'CONTINUITY_ITEM_MULTIPLE_HOLDERS', '道具存在多个当前持有者', 'current_holder_ids', holders)); if (record.data.holder_history &amp;&amp; !holders.length) result.push(diagnostic(record, 'CONTINUITY_ITEM_OWNERSHIP_REVIEW', '持有历史与当前持有状态需复核', 'holder_history')); }
+			else if (record.type === 'task' &amp;&amp; !record.data.legacyKind) { const task = creativeTaskDataFromRecord(record); const anchors = 'anchorId' in task.activation ? [task.activation.anchorId<span class="branch-0 cbranch-no" title="branch not covered" >] : task.activation.relation === 'between' ? [task.activation.startAnchorId, task.activation.endAnchorId] : task.activation.blockerIds; i</span>f (anchors.some(id =&gt; !snapshot.idRegistry.resolve(id))) result.push(diagnostic(record, 'PROG_ACTIVATION_ANCHOR_INVALID', '任务激活锚点无效', 'activation', anchors)); }
+			if (record.type === 'foreshadowing') result.push(...new ForeshadowingActionRules(snapshot, state).evaluate(record));
+		}
+		for (const action of new ActionProjectionService(snapshot, state).project()) if (action.source === 'creative_task') { const record = snapshot.idRegistry.resolve(action.key); if (!record) <span class="branch-0 cbranch-no" title="branch not covered" >continue; i</span>f (action.group === 'missed') <span class="branch-0 cbranch-no" title="branch not covered" >result.push(diagnostic(record, 'PROG_TASK_ANCHOR_PASSED', action.reason, 'activation', action.anchorIds)); i</span>f (action.group === 'now') { const hiddenAnchor = action.anchorIds.map(id =&gt; snapshot.idRegistry.resolve(id)).find(anchor =&gt; anchor?.type === 'event' &amp;&amp; (anchor.contextScope === <span class="branch-0 cbranch-no" title="branch not covered" >'history' || (!eventDataFromRecord(anchor).timelineViews.reality?.visible &amp;&amp; Boolean(eventDataFromRecord(anchor).timelineViews.hiddenWorld?.visible || eventDataFromRecord(anchor).timelineViews.cosmic?.visible))))</span>; if (hiddenAnchor) result.push(diagnostic(record, 'PROG_HIDDEN_HISTORY_TASK_ACTIVATED', '隐藏或历史事件触发了当前任务，需要作者确认', 'activation', hiddenAnchor.id)); } }
+		for (const [suggestionId, decision] of decisions) if (decision.decision === 'ignored_once' &amp;&amp; result.some(item =&gt; suggestionId.includes(item.ruleId<span class="branch-0 cbranch-no" title="branch not covered" >) &amp;&amp; suggestionId.includes(item.entityKey))</span>) <span class="branch-0 cbranch-no" title="branch not covered" >{ const target = snapshot.idRegistry.resolve(decision.targetKey); if (target) result.push(diagnostic(target, 'PROG_SUGGESTION_IGNORED_RELEVANT', '曾单次忽略的建议仍然相关', 'suggestion_id', suggestionId)); }</span>
+		return [...new Map(result.map(item =&gt; [`${item.ruleId}\0${item.entityKey}\0${JSON.stringify(item.evidence)}`, item])).values()];
+	}
+	private structureRules(record: EntityRecord, snapshot: IndexSnapshot, result: DiagnosticRef[]) {
+		if (record.id &amp;&amp; record.type !== 'unknown' &amp;&amp; !hasValidIdShape(record.type, record.id)) <span class="branch-0 cbranch-no" title="branch not covered" >{ const belongsElsewhere = Object.entries(ENTITY_ID_PREFIX).some(([type, prefix]) =&gt; type !== record.type &amp;&amp; record.id?.startsWith(`${prefix}-`)); result.push(diagnostic(record, belongsElsewhere ? 'STRUCT_ID_TYPE_MISMATCH' : 'STRUCT_ID_FORMAT_NONSTANDARD', belongsElsewhere ? 'ID 前缀与对象类型不匹配' : 'ID 格式非规范', 'id', record.id)); }</span>
+		for (const link of record.links) { const target = snapshot.idRegistry.resolve(link.toRef<span class="branch-0 cbranch-no" title="branch not covered" >) || snapshot.byKey.get(link.toRef); i</span>f (!target) <span class="branch-0 cbranch-no" title="branch not covered" >result.push(diagnostic(record, record.type === 'chapter' ? 'STRUCT_MANUSCRIPT_UNKNOWN_REFERENCE' : 'STRUCT_WIKILINK_BROKEN', '引用目标不存在', link.type, link.toRef)); else {</span> if (record.canon === 'canon' &amp;&amp; target.lifecycleStatus === 'deprecated') result.push(diagnostic(record, 'STRUCT_CANON_REFERENCES_DEPRECATED', '正式资料引用废弃对象', link.type, link.toRef)); if (record.contextScope === 'current' &amp;&amp; ['history', 'test'].includes(target.contextScope)) result.push(diagnostic(record, 'STRUCT_CONTEXT_SCOPE_LEAK', '当前上下文引用历史或测试对象', link.type, link.toRef)); } }
+		if (record.lifecycleStatus === <span class="branch-0 cbranch-no" title="branch not covered" >'archived' &amp;&amp; !/(?:archive|归档)/i.test(record.source.path)) <span class="branch-0 cbranch-no" title="branch not covered" >r</span>esult.push(diagnostic(record, 'STRUCT_DIRECTORY_STATUS_MISMATCH', '归档状态与目录位置不一致', 'lifecycle_status'));</span>
+		if (record.reviewStatus === <span class="branch-0 cbranch-no" title="branch not covered" >'pending_review' &amp;&amp; record.<span class="branch-0 cbranch-no" title="branch not covered" >lastReviewed &amp;&amp; D</span>ate.now() - Date.parse(record.lastReviewed) &gt; 365 * 86_400_000) <span class="branch-0 cbranch-no" title="branch not covered" >r</span>esult.push(diagnostic(record, 'STRUCT_REVIEW_STALE', '资料复核已超过一年', 'last_reviewed', record.lastReviewed));</span>
+		if (['event', 'character', 'item', 'organization', 'location'].includes(record.type) &amp;&amp; record.links.length === 0 &amp;&amp; snapshot.relations.getIncoming(record.<span class="branch-0 cbranch-no" title="branch not covered" >id || record.key)</span>.length === 0) result.push(diagnostic(record, 'STRUCT_CORE_ORPHANED', '核心对象没有可解析关系', undefined, record.<span class="branch-0 cbranch-no" title="branch not covered" >id || record.key)</span>);
+	}
+	private eventRules(record: EntityRecord, snapshot: IndexSnapshot, state: ProjectState | null, result: DiagnosticRef[]) { const data = eventDataFromRecord(record); if (data.eventStatus === 'occurring' &amp;&amp; !data.storyTime) result.push(diagnostic(record, 'EVENT_TIME_MISSING', '进行中事件缺少开始时间', 'story_time')); if (data.storyTime?.sortKey &amp;&amp; data.storyTimeEnd?.sortKey &amp;&amp; data.storyTime.calendar === data.storyTimeEnd.calendar &amp;&amp; data.storyTime.sortKey &gt; data.storyTimeEnd.sortKey) result.push(diagnostic(record, 'EVENT_TIME_CONFLICT', '事件结束时间早于开始时间', 'story_time_end', data.storyTimeEnd)); for (const id of data.prerequisiteEventIds) { const prerequisite = snapshot.idRegistry.resolve(id); if (!prerequisite) result.push(diagnostic(record, 'EVENT_DEPENDENCY_MISSING', '前置事件不存在', 'prerequisite_event_ids', id)); else if (prerequisite.type === 'event' &amp;&amp; eventDataFromRecord(prerequisite).storyline !== data.storyline) result.push(diagnostic(record, 'EVENT_CROSSLINE_JOIN_UNMET', '跨线前置条件需明确汇合', 'prerequisite_event_ids', id)); else if (prerequisite.type === 'event' &amp;&amp; eventDataFromRecord(prerequisite).eventStatus !== 'occurred') { if (state?.storylineCursors[data.storyline] === record.id) <span class="branch-0 cbranch-no" title="branch not covered" >result.push(diagnostic(record, 'EVENT_CURRENT_PREREQUISITE_MISSING', '当前事件前置条件未满足', 'prerequisite_event_ids', id)); i</span>f (data.currentChapterIds.length) <span class="branch-0 cbranch-no" title="branch not covered" >result.push(diagnostic(record, 'EVENT_CHAPTER_PREREQUISITE_UNMET', '章节承载事件的前置条件未满足', 'current_chapter_ids', data.currentChapterIds)); }</span> } for (const chapterId of data.currentChapterIds) if (!snapshot.idRegistry.resolve(chapterId)) result.push(diagnostic(record, 'CONTINUITY_CHAPTER_EVENT_MAPPING_BROKEN', '事件映射章节不存在', 'current_chapter_ids', chapterId)); if (data.knowledgeState.reader !== data.readerState) <span class="branch-0 cbranch-no" title="branch not covered" >result.push(diagnostic(record, 'CONTINUITY_KNOWLEDGE_REVIEW', '事件读者状态与知识投影需要复核', 'knowledge_state.reader', data.knowledgeState.reader)); }</span>
+}
+&nbsp;</pre></td></tr></table></pre>
+
+                <div class='push'></div><!-- for sticky footer -->
+            </div><!-- /wrapper -->
+            <div class='footer quiet pad2 space-top1 center small'>
+                Code coverage generated by
+                <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
+                at 2026-09-11T13:39:35.462Z
+            </div>
+        <script src="../../prettify.js"></script>
+        <script>
+            window.onload = function () {
+                prettyPrint();
+            };
+        </script>
+        <script src="../../sorter.js"></script>
+        <script src="../../block-navigation.js"></script>
+    </body>
+</html>
+    

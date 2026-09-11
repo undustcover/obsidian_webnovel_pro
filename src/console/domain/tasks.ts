@@ -30,3 +30,12 @@ export interface SuggestionIdentityInput {
 export function createSuggestionId(input: SuggestionIdentityInput): string {
 	return `SUG:${input.ruleId}:${input.targetKey}:${input.anchorId || 'none'}`;
 }
+
+export function canTransitionTaskStatus(from: CreativeTaskStatus | 'unknown', to: CreativeTaskStatus): boolean {
+	if (from === 'unknown' || from === to) return false;
+	const allowed: Readonly<Record<CreativeTaskStatus, readonly CreativeTaskStatus[]>> = {
+		planned: ['active', 'blocked', 'cancelled'], active: ['blocked', 'completed', 'cancelled'],
+		blocked: ['active', 'completed', 'cancelled'], completed: ['active'], cancelled: ['active'],
+	};
+	return allowed[from].includes(to);
+}

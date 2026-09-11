@@ -43,6 +43,7 @@ export class ChangePreviewModal extends Modal {
 		this.renderList('警告', this.options.plan.warnings);
 
 		const actions = this.contentEl.createDiv({ cls: 'webnovel-console-modal__actions' });
+		const feedback = this.contentEl.createDiv({ cls: 'webnovel-console-modal__feedback', attr: { role: 'alert', 'aria-live': 'assertive' } });
 		const cancel = actions.createEl('button', { text: '取消', attr: { type: 'button' } });
 		cancel.addEventListener('click', () => this.close());
 		const confirm = actions.createEl('button', { cls: 'mod-cta', text: '确认并执行', attr: { type: 'button' } });
@@ -51,7 +52,11 @@ export class ChangePreviewModal extends Modal {
 			this.submitted = true;
 			confirm.disabled = true;
 			const token = this.options.issueToken();
-			void Promise.resolve(this.options.onConfirm(this.options.plan, token)).finally(() => this.close());
+			void Promise.resolve(this.options.onConfirm(this.options.plan, token)).then(() => this.close()).catch(error => {
+				this.submitted = false;
+				confirm.disabled = false;
+				feedback.setText(`执行失败，可重试：${error instanceof Error ? error.message : String(error)}`);
+			});
 		});
 	}
 

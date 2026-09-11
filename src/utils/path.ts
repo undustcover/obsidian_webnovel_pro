@@ -6,7 +6,8 @@ import type { WorkbenchView } from '../ui/WorkbenchView';
 import { getDefaultFileName, getDefaultFileNameCandidates, type DefaultFileNameKey } from '../i18n/data-keys';
 
 export interface FindBookRootPlugin {
-	settings: Pick<AccurateCountSettings, 'workspaceFolders' | 'loreFolderName' | 'timeline' | 'foreshadowing' | 'novelInfo'>;
+	settings: Pick<AccurateCountSettings, 'workspaceFolders' | 'loreFolderName' | 'timeline' | 'foreshadowing' | 'novelInfo'>
+		& Partial<Pick<AccurateCountSettings, 'consoleProjects'>>;
 }
 
 export interface CurrentBookContextPlugin extends FindBookRootPlugin {
@@ -65,6 +66,13 @@ export function findBookRoot(app: App, plugin: FindBookRootPlugin, file: TFile |
 	if (!folder || folder.isRoot()) return '';
 
 	const workspaceFolders = plugin.settings.workspaceFolders || [];
+	const consoleProjects = plugin.settings.consoleProjects || [];
+	for (const project of consoleProjects) {
+		const projectRoot = project.root.replace(/^\/+|\/+$/g, '');
+		if (projectRoot && (folder.path === projectRoot || folder.path.startsWith(`${projectRoot}/`))) {
+			return projectRoot;
+		}
+	}
 
 	// 如果设置了工作区文件夹，则首先校验文件是否位于任一工作区文件夹内部
 	if (workspaceFolders.length > 0) {
@@ -80,6 +88,10 @@ export function findBookRoot(app: App, plugin: FindBookRootPlugin, file: TFile |
 
 	// 缓存一下候选文件名，减少循环内重新计算
 	const loreCandidates = getCandidateNames(plugin.settings.loreFolderName, 'loreFolderName');
+	for (const project of consoleProjects) {
+		const loreDirectory = project.directories?.lore?.trim();
+		if (loreDirectory) loreCandidates.add(loreDirectory.replace(/^\/+|\/+$/g, ''));
+	}
 	const timelineCandidates = getCandidateNames(plugin.settings.timeline?.fileName, 'timelineFileName');
 	const foreshadowingCandidates = getCandidateNames(plugin.settings.foreshadowing?.fileName, 'foreshadowingFileName');
 	const novelInfoCandidates = getCandidateNames(plugin.settings.novelInfo?.fileName, 'novelInfoFileName');

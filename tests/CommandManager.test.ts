@@ -107,8 +107,19 @@ describe('CommandManager - refresh-lore-cache', () => {
 		const commandManager = new CommandManager(mockPlugin);
 		commandManager.registerAllCommands();
 		expect(registeredCommands.has('open-novel-console')).toBe(true);
-		expect(registeredCommands.has('toggle-writing-status-view')).toBe(true);
-		expect(registeredCommands.has('toggle-workbench-view')).toBe(true);
+		for (const id of [
+			'toggle-writing-status-view',
+			'toggle-foreshadowing-view',
+			'toggle-timeline-view',
+			'toggle-workbench-view',
+			'toggle-corkboard-view',
+			'toggle-lore-overview-view',
+			'open-creative-homepage',
+			'create-next-chapter',
+			'split-chapter-at-cursor'
+		]) {
+			expect(registeredCommands.get(id)?.callback, `${id} should remain visible outside an editor`).toBeTypeOf('function');
+		}
 	 });
 
     it('should handle failure during rebuildCache or bulkRefresh gracefully', async () => {
@@ -451,6 +462,7 @@ describe('CommandManager - split-chapter-at-cursor', () => {
         workspace: {
             trigger: ReturnType<typeof vi.fn>;
             getLeavesOfType: ReturnType<typeof vi.fn>;
+			getActiveViewOfType: ReturnType<typeof vi.fn>;
         };
         vault: {
             getAbstractFileByPath: ReturnType<typeof vi.fn>;
@@ -478,7 +490,8 @@ describe('CommandManager - split-chapter-at-cursor', () => {
         mockApp = {
             workspace: {
                 trigger: vi.fn(),
-                getLeavesOfType: vi.fn().mockReturnValue([])
+                getLeavesOfType: vi.fn().mockReturnValue([]),
+				getActiveViewOfType: vi.fn().mockReturnValue(null)
             },
             vault: {
                 getAbstractFileByPath: vi.fn()
@@ -501,30 +514,26 @@ describe('CommandManager - split-chapter-at-cursor', () => {
         };
     });
 
-    it('should register split-chapter-at-cursor with bilingual name, scissors icon, and editorCheckCallback', () => {
-        const commandManager = new CommandManager(mockPlugin as unknown as WebNovelAssistantPlugin);
-        commandManager.registerAllCommands();
+	it('should register split-chapter-at-cursor as an always-visible command', () => {
+		const commandManager = new CommandManager(mockPlugin as unknown as WebNovelAssistantPlugin);
+		commandManager.registerAllCommands();
 
         const cmd = registeredCommands.get('split-chapter-at-cursor');
         expect(cmd).toBeDefined();
-        expect(cmd?.id).toBe('split-chapter-at-cursor');
-        expect(cmd?.name).toBe('在光标处拆分章节');
-        expect(cmd?.icon).toBe('scissors');
-        expect(cmd?.editorCheckCallback).toBeDefined();
-    });
+		expect(cmd?.id).toBe('split-chapter-at-cursor');
+		expect(cmd?.name).toBe('在光标处拆分章节');
+		expect(cmd?.icon).toBe('scissors');
+		expect(cmd?.callback).toBeDefined();
+	});
 
-    it('should only be available for full MarkdownView (checking=true)', () => {
-        const commandManager = new CommandManager(mockPlugin as unknown as WebNovelAssistantPlugin);
-        commandManager.registerAllCommands();
+	it('should explain when no Markdown chapter editor is active', () => {
+		const commandManager = new CommandManager(mockPlugin as unknown as WebNovelAssistantPlugin);
+		commandManager.registerAllCommands();
 
-        const cmd = registeredCommands.get('split-chapter-at-cursor');
-        const notMarkdownView = {} as unknown as MarkdownView;
-        const mockEditor = {} as unknown as Editor;
-        expect(cmd?.editorCheckCallback?.(true, mockEditor, notMarkdownView)).toBe(false);
-
-        const markdownView = Object.create(MarkdownView.prototype) as MarkdownView;
-        expect(cmd?.editorCheckCallback?.(true, mockEditor, markdownView)).toBe(true);
-    });
+		const cmd = registeredCommands.get('split-chapter-at-cursor');
+		cmd?.callback?.();
+		expect(mockNoticeMessages).toContain('请先在 Markdown 编辑模式中打开一个章节，再执行此命令');
+	});
 
     it('should invoke splitChapterAtCursor and pass naming prompt and explorer refresh callbacks', async () => {
         const splitSpy = vi.spyOn(ChapterSplitterModule, 'splitChapterAtCursor').mockResolvedValue(true);
@@ -532,12 +541,18 @@ describe('CommandManager - split-chapter-at-cursor', () => {
         const commandManager = new CommandManager(mockPlugin as unknown as WebNovelAssistantPlugin);
         commandManager.registerAllCommands();
 
-        const cmd = registeredCommands.get('split-chapter-at-cursor');
-        const mockEditor = {} as unknown as Editor;
-        const mockView = Object.create(MarkdownView.prototype) as MarkdownView;
+		const cmd = registeredCommands.get('split-chapter-at-cursor');
+		const mockEditor = {} as unknown as Editor;
+		const mockView = Object.create(MarkdownView.prototype) as MarkdownView;
+		const chapterFile = new TFile();
+		chapterFile.name = '第1章.md';
+		chapterFile.path = 'Book/第1章.md';
+		chapterFile.basename = '第1章';
+		mockView.editor = mockEditor;
+		mockView.file = chapterFile;
+		mockApp.workspace.getActiveViewOfType.mockReturnValue(mockView);
 
-        const checkRes = cmd?.editorCheckCallback?.(false, mockEditor, mockView);
-        expect(checkRes).toBe(true);
+		cmd?.callback?.();
 
         // Allow async invocation in editorCheckCallback to run
         await new Promise(resolve => setTimeout(resolve, 0));
@@ -563,11 +578,18 @@ describe('CommandManager - split-chapter-at-cursor', () => {
         const commandManager = new CommandManager(mockPlugin as unknown as WebNovelAssistantPlugin);
         commandManager.registerAllCommands();
 
-        const cmd = registeredCommands.get('split-chapter-at-cursor');
-        const mockEditor = {} as unknown as Editor;
-        const mockView = Object.create(MarkdownView.prototype) as MarkdownView;
+		const cmd = registeredCommands.get('split-chapter-at-cursor');
+		const mockEditor = {} as unknown as Editor;
+		const mockView = Object.create(MarkdownView.prototype) as MarkdownView;
+		const chapterFile = new TFile();
+		chapterFile.name = '第1章.md';
+		chapterFile.path = 'Book/第1章.md';
+		chapterFile.basename = '第1章';
+		mockView.editor = mockEditor;
+		mockView.file = chapterFile;
+		mockApp.workspace.getActiveViewOfType.mockReturnValue(mockView);
 
-        cmd?.editorCheckCallback?.(false, mockEditor, mockView);
+		cmd?.callback?.();
 
         // Allow async invocation in editorCheckCallback to run
         await new Promise(resolve => setTimeout(resolve, 0));

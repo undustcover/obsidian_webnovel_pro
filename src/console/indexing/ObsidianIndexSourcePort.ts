@@ -1,4 +1,4 @@
-import type { TFile, App } from 'obsidian';
+import { parseYaml, type TFile, type App } from 'obsidian';
 import type { AdapterSource } from '../adapters';
 import type { ConsoleProjectConfig } from '../config';
 import type { IndexSourcePort } from './EntityIndexService';
@@ -13,6 +13,17 @@ export function hashIndexContent(content: string): string {
 	return `fnv1a32:${(hash >>> 0).toString(16).padStart(8, '0')}:${content.length}`;
 }
 
+function frontmatterFromContent(content: string): Record<string, unknown> | undefined {
+	const match = content.replace(/\r\n/g, '\n').match(/^---\n([\s\S]*?)\n---(?:\n|$)/);
+	if (!match) return undefined;
+	try {
+		const parsed: unknown = parseYaml(match[1]);
+		return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : undefined;
+	} catch {
+		return undefined;
+	}
+}
+
 export class ObsidianIndexSourcePort implements IndexSourcePort {
 	constructor(private app: App, private scope = new ProjectScopeResolver()) {}
 
@@ -22,7 +33,9 @@ export class ObsidianIndexSourcePort implements IndexSourcePort {
 		return {
 			path: file.path, basename: file.basename, mtime: file.stat.mtime,
 			contentHash: hashIndexContent(content), content,
-			frontmatter: cache?.frontmatter,
+			// Vault create/modify events can precede MetadataCache. Parse the content first so
+			// transaction-triggered refreshes cannot publish an empty or stale contribution.
+			frontmatter: frontmatterFromContent(content) ?? cache?.frontmatter,
 			headings: cache?.headings?.map((heading) => ({ heading: heading.heading, level: heading.level })),
 		};
 	}
@@ -32,3 +45,5 @@ export class ObsidianIndexSourcePort implements IndexSourcePort {
 		return Promise.all(files.map((file) => this.toSource(file)));
 	}
 }
+
+export { frontmatterFromContent };
