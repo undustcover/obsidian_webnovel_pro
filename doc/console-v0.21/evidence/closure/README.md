@@ -48,6 +48,12 @@
 | AC-30 | P0-091、093、094 | [P0-076B](P0-076B-ac-audit.md) | P0-093 legacy regression/RC smoke |
 | AC-31 | P0-085～088、090～094 | [P0-076B](P0-076B-ac-audit.md) | P0-090 actions、P0-091 write smoke、P0-093 RC smoke |
 
+## P0-093 发布收口
+
+- [旧能力回归](P0-093-legacy-regression.md)
+- [完整工程验证](P0-093-engineering-validation.md)
+- [发布候选固化](P0-093-release-candidate.md)
+
 ## 索引维护规则
 
 1. 原子任务完成时，将对应“待生成”条目替换为实际相对链接，并写入命令、退出码、稳定断言和遗留问题。
