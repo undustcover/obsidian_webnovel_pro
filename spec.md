@@ -227,7 +227,7 @@ organizations: { ORG-0003: minor }
 
 求值结果：`not_ready | completion_ready | indeterminate | manual_review`。任何结果都不直接写 `completed`。
 
-项目状态文件固定结构：`schema_version`、唯一 `current_focus`、`storyline_cursors: Record<storyline,eventId>`。文件不存在显示“未配置”，只允许由作者点击后经预览创建。
+项目状态文件固定结构：`schema_version`、唯一 `current_focus`、`storyline_cursors: Record<storyline,eventId>`。`current_focus` 取一个正式 ID 或 YAML `null`；`null` 表示“无焦点”，不删除状态文件且保留全部故事线游标。文件不存在显示“未配置”，只允许由作者点击后经预览创建。该可空语义于 2026-09-11 经用户批准，用于支持显式清除焦点。
 
 图距离：在同一 storyline 的事件依赖有向图中，从当前 cursor 沿“前置 -> 后继”边做 BFS，最短边数为距离；默认阈值 2，项目可配置 1–5。环、跨线、缺边、不可达均返回带 reason 的非数值结果，禁止猜测。
 

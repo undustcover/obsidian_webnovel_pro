@@ -35,17 +35,20 @@ export function restoreRouterState(value: unknown): ConsoleRouterState {
 }
 
 export function pageTitle(page: ConsolePage): string {
-	const titles: Record<ConsolePage, string> = {
-		'overview': '总览', 'control/views': '视图管理', 'control/current-stage': '当前阶段',
-		'control/current-tasks': '当前任务', 'control/novel-overview': '小说总览', 'control/changes': '重要变更',
-		'control/id-registry': 'ID 注册表', 'control/templates': '模板', 'narrative/book': '全书',
-		'narrative/parts': '分部', 'narrative/volumes': '分卷', 'narrative/units': '单元',
-		'narrative/plans': '策划', 'narrative/chapters': '章节', 'manuscript': '正文',
-		'lore/worlds': '世界观', 'lore/characters': '人物', 'lore/organizations': '组织',
-		'lore/locations': '地点', 'lore/items': '道具', 'lore/abilities': '能力', 'lore/terms': '术语',
-		'events/control': '事件总控', 'events/milestones': '里程碑', 'events/reality': '现实时间轴',
-		'events/hidden': '隐藏世界', 'events/cosmic': '宇宙历史', 'events/archive': '事件归档',
-		'materials/references': '参考资料', 'materials/ideas': '灵感', 'context': '上下文', 'health': '资料健康',
-	};
-	return titles[page];
+	// Kept as the stable public helper while the source of truth lives in PageDefinition.
+	// The lazy require avoids a router <-> registry initialization cycle.
+	return PAGE_TITLES[page];
 }
+
+const PAGE_TITLES: Record<ConsolePage, string> = {
+	'overview': '总览', 'control/views': '视图管理', 'control/current-stage': '当前阶段',
+	'control/current-tasks': '当前任务', 'control/novel-overview': '小说总览', 'control/changes': '重要变更',
+	'control/id-registry': 'ID 注册表', 'control/templates': '模板', 'narrative/book': '全书',
+	'narrative/parts': '分部', 'narrative/volumes': '分卷', 'narrative/units': '单元',
+	'narrative/plans': '策划', 'narrative/chapters': '章节', 'manuscript': '正文',
+	'lore/worlds': '世界观', 'lore/characters': '人物', 'lore/organizations': '组织',
+	'lore/locations': '地点', 'lore/items': '道具', 'lore/abilities': '能力', 'lore/terms': '术语',
+	'events/control': '事件总控', 'events/milestones': '里程碑', 'events/reality': '现实时间轴',
+	'events/hidden': '隐藏世界', 'events/cosmic': '宇宙历史', 'events/archive': '事件归档',
+	'materials/references': '参考资料', 'materials/ideas': '灵感', 'context': '上下文', 'health': '资料健康',
+};

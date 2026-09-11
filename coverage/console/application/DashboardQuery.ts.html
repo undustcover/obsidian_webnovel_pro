@@ -25,28 +25,28 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">100% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>15/15</span>
+                <span class='fraction'>26/26</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">92.85% </span>
+                <span class="strong">89.47% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>13/14</span>
+                <span class='fraction'>17/19</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">100% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>2/2</span>
+                <span class='fraction'>3/3</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">100% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>15/15</span>
+                <span class='fraction'>26/26</span>
             </div>
         
             
@@ -91,8 +91,23 @@
 <a name='L26'></a><a href='#L26'>26</a>
 <a name='L27'></a><a href='#L27'>27</a>
 <a name='L28'></a><a href='#L28'>28</a>
-<a name='L29'></a><a href='#L29'>29</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L29'></a><a href='#L29'>29</a>
+<a name='L30'></a><a href='#L30'>30</a>
+<a name='L31'></a><a href='#L31'>31</a>
+<a name='L32'></a><a href='#L32'>32</a>
+<a name='L33'></a><a href='#L33'>33</a>
+<a name='L34'></a><a href='#L34'>34</a>
+<a name='L35'></a><a href='#L35'>35</a>
+<a name='L36'></a><a href='#L36'>36</a>
+<a name='L37'></a><a href='#L37'>37</a>
+<a name='L38'></a><a href='#L38'>38</a>
+<a name='L39'></a><a href='#L39'>39</a>
+<a name='L40'></a><a href='#L40'>40</a>
+<a name='L41'></a><a href='#L41'>41</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -105,9 +120,18 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-yes">3x</span>
@@ -122,6 +146,9 @@
 <span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">import type { IndexSnapshot } from '../indexing';
 import type { ProjectState } from '../persistence/ProjectStateRepository';
 import { ChapterWorkspaceQuery, type ChapterWorkspace } from './ChapterWorkspaceQuery';
+import { ActionProjectionService, type ActionItem } from './ActionProjectionService';
+import { HealthRuleRegistry } from './HealthRuleRegistry';
+import { createUnconfiguredState, type ConsoleAvailabilityState } from '../domain';
 &nbsp;
 export interface DashboardModel {
 	configured: boolean;
@@ -129,21 +156,30 @@ export interface DashboardModel {
 	storylineCursors: Record&lt;string, string&gt;;
 	chapterWorkspace?: ChapterWorkspace;
 	indexStatus: string;
+	availability: ConsoleAvailabilityState;
 	healthCount: number;
-	actionGroups: { now: string[]; missed: string[]; upcoming: string[]; later: string[] };
+	actionGroups: { now: ActionItem[]; missed: ActionItem[]; upcoming: ActionItem[]; later: ActionItem[]; needs_confirmation: ActionItem[] };
 }
 &nbsp;
 export class DashboardQuery {
-	constructor(private readonly snapshotProvider: () =&gt; IndexSnapshot | undefined) {}
+	constructor(
+		private readonly snapshotProvider: () =&gt; IndexSnapshot | undefined,
+		private readonly availabilityProvider: () =&gt; ConsoleAvailabilityState = createUnconfiguredState,
+	) {}
 	execute(state: ProjectState | null): DashboardModel {
 		const snapshot = this.snapshotProvider();
-		const currentFocus = state?.currentFocus;
+		const currentFocus = state?.currentFocus || undefined;
 		const focusRecord = currentFocus ? snapshot?.idRegistry.resolve(currentFocus<span class="branch-0 cbranch-no" title="branch not covered" >) || snapshot?.byKey.get(currentFocus) : u</span>ndefined;
 		const chapterWorkspace = focusRecord?.type === 'chapter' ? new ChapterWorkspaceQuery(this.snapshotProvider).execute(focusRecord.key) : undefined;
+		const health = snapshot ? new HealthRuleRegistry().evaluate(snapshot, state) : [];
+		const actions: ActionItem[] = snapshot ? new ActionProjectionService(snapshot, state).project() : [];
+		for (const item of health.filter(entry =&gt; entry.ruleId === 'PROG_FORESHADOWING_OVERDUE' || entry.ruleId === 'PROG_FORESHADOWING_ANCHOR_PASSED')) <span class="branch-0 cbranch-no" title="branch not covered" >actions.push({ key: item.entityKey, title: item.entityKey, group: item.ruleId.endsWith('ANCHOR_PASSED') ? 'missed' : 'upcoming', source: 'foreshadowing', reason: item.message, anchorIds: item.evidence.flatMap(evidence =&gt; typeof evidence.value === 'string' ? [evidence.value] : []), priority: 'normal' });</span>
+		const group = (name: ActionItem['group']) =&gt; actions.filter(item =&gt; item.group === name);
+		const availability = this.availabilityProvider();
 		return {
 			configured: Boolean(state), currentFocus, storylineCursors: { ...(state?.storylineCursors || {}) }, chapterWorkspace,
-			indexStatus: snapshot ? 'idle' : 'error', healthCount: snapshot?.diagnostics.length || 0,
-			actionGroups: { now: [], missed: [], upcoming: [], later: [] },
+			indexStatus: availability.status, availability, healthCount: health.length,
+			actionGroups: { now: group('now'), missed: group('missed'), upcoming: group('upcoming'), later: group('later'), needs_confirmation: group('needs_confirmation') },
 		};
 	}
 }
@@ -154,7 +190,7 @@ export class DashboardQuery {
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-09-09T08:18:47.838Z
+                at 2026-09-11T09:34:06.164Z
             </div>
         <script src="../../prettify.js"></script>
         <script>

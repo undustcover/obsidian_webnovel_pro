@@ -1,0 +1,247 @@
+
+<!doctype html>
+<html lang="en">
+
+<head>
+    <title>Code coverage report for console/persistence/CreativeTaskRepository.ts</title>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="../../prettify.css" />
+    <link rel="stylesheet" href="../../base.css" />
+    <link rel="shortcut icon" type="image/x-icon" href="../../favicon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style type='text/css'>
+        .coverage-summary .sorter {
+            background-image: url(../../sort-arrow-sprite.png);
+        }
+    </style>
+</head>
+    
+<body>
+<div class='wrapper'>
+    <div class='pad1'>
+        <h1><a href="../../index.html">All files</a> / <a href="index.html">console/persistence</a> CreativeTaskRepository.ts</h1>
+        <div class='clearfix'>
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">100% </span>
+                <span class="quiet">Statements</span>
+                <span class='fraction'>47/47</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">71.25% </span>
+                <span class="quiet">Branches</span>
+                <span class='fraction'>57/80</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">100% </span>
+                <span class="quiet">Functions</span>
+                <span class='fraction'>16/16</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">100% </span>
+                <span class="quiet">Lines</span>
+                <span class='fraction'>47/47</span>
+            </div>
+        
+            
+        </div>
+        <p class="quiet">
+            Press <em>n</em> or <em>j</em> to go to the next uncovered block, <em>b</em>, <em>p</em> or <em>k</em> for the previous block.
+        </p>
+        <template id="filterTemplate">
+            <div class="quiet">
+                Filter:
+                <input type="search" id="fileSearch">
+            </div>
+        </template>
+    </div>
+    <div class='status-line high'></div>
+    <pre><table class="coverage">
+<tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
+<a name='L2'></a><a href='#L2'>2</a>
+<a name='L3'></a><a href='#L3'>3</a>
+<a name='L4'></a><a href='#L4'>4</a>
+<a name='L5'></a><a href='#L5'>5</a>
+<a name='L6'></a><a href='#L6'>6</a>
+<a name='L7'></a><a href='#L7'>7</a>
+<a name='L8'></a><a href='#L8'>8</a>
+<a name='L9'></a><a href='#L9'>9</a>
+<a name='L10'></a><a href='#L10'>10</a>
+<a name='L11'></a><a href='#L11'>11</a>
+<a name='L12'></a><a href='#L12'>12</a>
+<a name='L13'></a><a href='#L13'>13</a>
+<a name='L14'></a><a href='#L14'>14</a>
+<a name='L15'></a><a href='#L15'>15</a>
+<a name='L16'></a><a href='#L16'>16</a>
+<a name='L17'></a><a href='#L17'>17</a>
+<a name='L18'></a><a href='#L18'>18</a>
+<a name='L19'></a><a href='#L19'>19</a>
+<a name='L20'></a><a href='#L20'>20</a>
+<a name='L21'></a><a href='#L21'>21</a>
+<a name='L22'></a><a href='#L22'>22</a>
+<a name='L23'></a><a href='#L23'>23</a>
+<a name='L24'></a><a href='#L24'>24</a>
+<a name='L25'></a><a href='#L25'>25</a>
+<a name='L26'></a><a href='#L26'>26</a>
+<a name='L27'></a><a href='#L27'>27</a>
+<a name='L28'></a><a href='#L28'>28</a>
+<a name='L29'></a><a href='#L29'>29</a>
+<a name='L30'></a><a href='#L30'>30</a>
+<a name='L31'></a><a href='#L31'>31</a>
+<a name='L32'></a><a href='#L32'>32</a>
+<a name='L33'></a><a href='#L33'>33</a>
+<a name='L34'></a><a href='#L34'>34</a>
+<a name='L35'></a><a href='#L35'>35</a>
+<a name='L36'></a><a href='#L36'>36</a>
+<a name='L37'></a><a href='#L37'>37</a>
+<a name='L38'></a><a href='#L38'>38</a>
+<a name='L39'></a><a href='#L39'>39</a>
+<a name='L40'></a><a href='#L40'>40</a>
+<a name='L41'></a><a href='#L41'>41</a>
+<a name='L42'></a><a href='#L42'>42</a>
+<a name='L43'></a><a href='#L43'>43</a>
+<a name='L44'></a><a href='#L44'>44</a>
+<a name='L45'></a><a href='#L45'>45</a>
+<a name='L46'></a><a href='#L46'>46</a>
+<a name='L47'></a><a href='#L47'>47</a>
+<a name='L48'></a><a href='#L48'>48</a>
+<a name='L49'></a><a href='#L49'>49</a>
+<a name='L50'></a><a href='#L50'>50</a>
+<a name='L51'></a><a href='#L51'>51</a>
+<a name='L52'></a><a href='#L52'>52</a>
+<a name='L53'></a><a href='#L53'>53</a>
+<a name='L54'></a><a href='#L54'>54</a>
+<a name='L55'></a><a href='#L55'>55</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">30x</span>
+<span class="cline-any cline-yes">30x</span>
+<span class="cline-any cline-yes">30x</span>
+<span class="cline-any cline-yes">30x</span>
+<span class="cline-any cline-yes">30x</span>
+<span class="cline-any cline-yes">30x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">30x</span>
+<span class="cline-any cline-yes">30x</span>
+<span class="cline-any cline-yes">30x</span>
+<span class="cline-any cline-yes">30x</span>
+<span class="cline-any cline-yes">30x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">11x</span>
+<span class="cline-any cline-yes">11x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">11x</span>
+<span class="cline-any cline-yes">11x</span>
+<span class="cline-any cline-yes">11x</span>
+<span class="cline-any cline-yes">11x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">12x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">12x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">import { ACTIVATION_RELATIONS, TASK_STATUSES, canTransitionTaskStatus, type ChangePlan, type CreativeTaskData, type EntityRecord, type TaskActivation } from '../domain';
+import type { ConsoleProjectConfig } from '../config';
+import type { IndexSnapshot } from '../indexing';
+import type { MarkdownChangePlanner, MarkdownPlanningPort } from './MarkdownChangePlanner';
+&nbsp;
+const list = (value: unknown): string[] =&gt; Array.isArray(value) ? value.filter((item): item is string =&gt; typeof item === 'string'<span class="branch-0 cbranch-no" title="branch not covered" >) : [];</span>
+const text = (value: unknown): string =&gt; typeof value === 'string' ? <span class="branch-0 cbranch-no" title="branch not covered" >value : '';</span>
+const enumValue = &lt;T extends string&gt;(value: unknown, allowed: readonly T[]): T | 'unknown' =&gt; typeof value === 'string' &amp;&amp; allowed.includes(value as T) ? <span class="branch-0 cbranch-no" title="branch not covered" >value as T : 'unknown';</span>
+const normalizeActivation = (value: unknown): TaskActivation =&gt; {
+	const data = value &amp;&amp; typeof value === 'object' &amp;&amp; !Array.isArray(value) ? <span class="branch-0 cbranch-no" title="branch not covered" >value as Record&lt;string, unknown&gt; : {};</span>
+	const relation = enumValue(data.relation, ACTIVATION_RELATIONS);
+	if (relation === 'between') return { relation, anchorType: data.anchor_type === <span class="branch-0 cbranch-no" title="branch not covered" >'milestone' ? 'milestone' : '</span>event', startAnchorId: text(data.start_anchor_id), endAnchorId: text(data.end_anchor_id) };
+	if (relation === 'blocked_by') return { relation, anchorType: data.anchor_type === <span class="branch-0 cbranch-no" title="branch not covered" >'event' ? 'event' : '</span>task', blockerIds: list(data.blocker_ids) };
+	return { relation: relation === <span class="branch-0 cbranch-no" title="branch not covered" >'unknown' ? 'at' : r</span>elation, anchorType: data.anchor_type === 'milestone' ? 'milestone' : 'event', anchorId: text(data.anchor_id) };
+};
+&nbsp;
+export function creativeTaskDataFromRecord(record: EntityRecord): CreativeTaskData {
+	if (record.type !== 'task' || record.data.legacyKind) <span class="branch-0 cbranch-no" title="branch not covered" >throw new Error('CREATIVE_TASK_NOT_FOUND');</span>
+	const data = record.data;
+	const dueAt = typeof data.due_at === <span class="branch-0 cbranch-no" title="branch not covered" >'string' ? data.due_at : t</span>ypeof data.dueAt === <span class="branch-0 cbranch-no" title="branch not covered" >'string' ? data.dueAt : u</span>ndefined;
+	return { taskKind: text(data.task_kind<span class="branch-0 cbranch-no" title="branch not covered" >) || text(data.taskKind), s</span>tatus: enumValue(data.status, TASK_STATUSES), priority: enumValue(data.priority, ['low', 'normal', 'high', 'critical'] as const), relatedObjectIds: list(data.<span class="branch-0 cbranch-no" title="branch not covered" >related_object_ids || data.relatedObjectIds)</span>, activation: normalizeActivation(data.activation), blockedByIds: list(data.<span class="branch-0 cbranch-no" title="branch not covered" >blocked_by_ids || data.blockedByIds)</span>, ...(<span class="branch-0 cbranch-no" title="branch not covered" >dueAt ? { dueAt } : {</span>}) };
+}
+&nbsp;
+function validate(data: CreativeTaskData): void {
+	if (!data.taskKind.trim() || data.status === 'unknown' || data.priority === 'unknown') throw new Error('INVALID_CREATIVE_TASK');
+	const activation = data.activation;
+	if ('anchorId' in activation &amp;&amp; !activation.anchorId) throw new Error('INVALID_TASK_ANCHOR');
+	if (activation.relation === 'between' &amp;&amp; (!activation.<span class="branch-0 cbranch-no" title="branch not covered" >startAnchorId || !activation.endAnchorId)) t</span>hrow new Error('INVALID_TASK_ANCHOR');
+	if (activation.relation === 'blocked_by' &amp;&amp; !activation.blockerIds.length) throw new Error('INVALID_TASK_BLOCKERS');
+}
+const safe = (value: string) =&gt; [...value].map(char =&gt; char.charCodeAt(0) &lt; 32 || '&lt;&gt;:"/\\|?*'.includes(char<span class="branch-0 cbranch-no" title="branch not covered" >) ? '-' : c</span>har).join('').trim().slice(0, 80<span class="branch-0 cbranch-no" title="branch not covered" >) || '未命名任务';</span>
+const render = (id: string, title: string, data: CreativeTaskData, body = `# ${title}`) =&gt; { validate(data); return ['---', 'type: task', `id: ${id}`, `title: ${JSON.stringify(title)}`, `task_kind: ${JSON.stringify(data.taskKind)}`, `status: ${data.status}`, `priority: ${data.priority}`, `related_object_ids: ${JSON.stringify(data.relatedObjectIds)}`, `activation: ${JSON.stringify(data.activation).replace(/"anchorType":/g, '"anchor_type":').replace(/"anchorId":/g, '"anchor_id":').replace(/"startAnchorId":/g, '"start_anchor_id":').replace(/"endAnchorId":/g, '"end_anchor_id":').replace(/"blockerIds":/g, '"blocker_ids":')}`, `blocked_by_ids: ${JSON.stringify(data.blockedByIds)}`, ...(data.<span class="branch-0 cbranch-no" title="branch not covered" >dueAt ? [`due_at: ${JSON.stringify(data.dueAt)}`] : [</span>]), '---', '', body.trim(), ''].join('\n'); };
+const bodyOf = (content: string) =&gt; { const normalized = content.replace(/\r\n/g, '\n'); const end = normalized.startsWith('---\n') ? normalized.indexOf('\n---', 4<span class="branch-0 cbranch-no" title="branch not covered" >) : -1; r</span>eturn end &lt; <span class="branch-0 cbranch-no" title="branch not covered" >0 ? normalized : n</span>ormalized.slice(end + 4).replace(/^\n+/, ''); };
+const join = (...parts: string[]) =&gt; parts.filter(Boolean).join('/').replace(/\\/g, '/').replace(/\/+/g, '/').replace(/^\//, '');
+&nbsp;
+export class CreativeTaskRepository {
+	constructor(private snapshotProvider: () =&gt; IndexSnapshot | undefined, private project: ConsoleProjectConfig, private port: MarkdownPlanningPort, private planner: MarkdownChangePlanner) {}
+	read(key: string) { const snapshot = this.snapshotProvider(); const record = snapshot?.byKey.get(key) || snapshot?.idRegistry.resolve(key); return record?.type === 'task' &amp;&amp; !record.data.legacyKind ? { record, data: creativeTaskDataFromRecord(record) } : null; }
+	async planCreate(id: string, title: string, data: CreativeTaskData, requestedAt = new Date().toISOString()): Promise&lt;ChangePlan&gt; {
+		const snapshot = this.snapshotProvider(); if (!snapshot) throw new Error('INDEX_UNAVAILABLE'); if (!/^TSK-\d{4,}$/.test(id)) throw new Error('INVALID_TASK_ID'); if (snapshot.idRegistry.resolve(id)) throw new Error('TASK_ID_EXISTS');
+		return this.planner.plan({ type: 'create-entity', actor: 'author', requestedAt, targetKeys: [id], payload: { mutations: [{ path: join(this.project.root, this.project.directories.control, '创作任务', `${id}-${safe(title)}.md`), operation: 'create', content: render(id, title, data) }] } }, snapshot.version);
+	}
+	async planUpdate(key: string, data: CreativeTaskData, requestedAt = new Date().toISOString()): Promise&lt;ChangePlan&gt; {
+		const current = this.read(key); const snapshot = this.snapshotProvider(); if (!snapshot) <span class="branch-0 cbranch-no" title="branch not covered" >throw new Error('INDEX_UNAVAILABLE'); i</span>f (!current?.record.id) throw new Error('CREATIVE_TASK_NOT_FOUND'); const source = await this.port.read(current.record.source.path); if (!source) throw new Error('TASK_SOURCE_NOT_FOUND');
+		const plan = await this.planner.plan({ type: 'update-entity-fields', actor: 'author', requestedAt, targetKeys: [current.record.id], payload: { mutations: [{ path: current.record.source.path, operation: 'modify', content: render(current.record.id, current.record.title, data, bodyOf(source.content)) }] } }, snapshot.version); return plan;
+	}
+	async planDelete(key: string, requestedAt = new Date().toISOString()): Promise&lt;ChangePlan&gt; {
+		const current = this.read(key); const snapshot = this.snapshotProvider();
+		if (!snapshot) <span class="branch-0 cbranch-no" title="branch not covered" >throw new Error('INDEX_UNAVAILABLE');</span>
+		if (!current?.record.id) throw new Error('CREATIVE_TASK_NOT_FOUND');
+		return this.planner.plan({ type: 'delete-entity', actor: 'author', requestedAt, targetKeys: [current.record.id], payload: { mutations: [{ path: current.record.source.path, operation: 'delete' }], warnings: ['删除创作任务不可由 Console 自动裁决；执行前请核对引用与影响报告。'] } }, snapshot.version);
+	}
+	async planStatus(key: string, to: CreativeTaskData['status'], requestedAt?: string): Promise&lt;ChangePlan&gt; { const current = this.read(key); if (!current || to === 'unknown') <span class="branch-0 cbranch-no" title="branch not covered" >throw new Error('CREATIVE_TASK_NOT_FOUND'); i</span>f (!canTransitionTaskStatus(current.data.status, to)) throw new Error('TASK_TRANSITION_NOT_ALLOWED'); const plan = await this.planUpdate(key, { ...current.data, status: to }, requestedAt); plan.fieldDiffs = [{ path: current.record.source.path, field: 'status', before: current.data.status, after: to }]; return plan; }
+}
+&nbsp;</pre></td></tr></table></pre>
+
+                <div class='push'></div><!-- for sticky footer -->
+            </div><!-- /wrapper -->
+            <div class='footer quiet pad2 space-top1 center small'>
+                Code coverage generated by
+                <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
+                at 2026-09-11T09:34:06.164Z
+            </div>
+        <script src="../../prettify.js"></script>
+        <script>
+            window.onload = function () {
+                prettyPrint();
+            };
+        </script>
+        <script src="../../sorter.js"></script>
+        <script src="../../block-navigation.js"></script>
+    </body>
+</html>
+    

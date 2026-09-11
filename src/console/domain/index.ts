@@ -8,3 +8,4 @@ export * from './tasks';
 export * from './knowledge';
 export * from './changes';
 export * from './normalization';
+export * from './availability';

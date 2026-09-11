@@ -5,3 +5,8 @@ export * from './ObsidianTransactionPort';
 export * from './ProjectStateRepository';
 export * from './ChapterWorkspaceCommandService';
 export * from './ContextOutputRepository';
+export * from './EventRepository';
+export * from './CreativeTaskRepository';
+export * from './SuggestionDecisionRepository';
+export * from './ForeshadowingCommandService';
+export * from './EventRepository';

@@ -25,6 +25,8 @@ export interface ChapterMergeItem {
 	originalAnnotation: string;
 	/** 是否已被修改 */
 	isModified: boolean;
+	/** 加载时捕获的稳定锚点，用于阻止陈旧合并覆盖并发关系修改。 */
+	stableAnchors?: { chapterId?: string; referenceIds: readonly string[] };
 }
 
 /**
@@ -162,7 +164,8 @@ export class ChapterMergeManager {
 				currentBody: body,
 				annotation: '',
 				originalAnnotation: '',
-				isModified: false
+				isModified: false,
+				stableAnchors: ChapterSorter.inspectStableAnchors(fullContent)
 			});
 		}
 
@@ -178,6 +181,19 @@ export class ChapterMergeManager {
 	public async saveToOriginalFiles(items: ChapterMergeItem[]): Promise<number> {
 		let updatedCount = 0;
 
+		// Preflight every target before the first write so a late conflict cannot leave a partial batch.
+		for (const item of items) {
+			if (!item.isModified || !item.stableAnchors) continue;
+			const diskContent = await this.app.vault.cachedRead(item.file);
+			const diskAnchors = ChapterSorter.inspectStableAnchors(diskContent);
+			if (
+				diskAnchors.chapterId !== item.stableAnchors.chapterId ||
+				diskAnchors.referenceIds.join('\0') !== item.stableAnchors.referenceIds.join('\0')
+			) {
+				throw new Error(`CHAPTER_STABLE_ANCHOR_CONFLICT:${item.file.path}`);
+			}
+		}
+
 		for (const item of items) {
 			if (!item.isModified) continue;
 
@@ -190,6 +206,7 @@ export class ChapterMergeManager {
 			item.originalBody = item.currentBody;
 			item.originalAnnotation = item.annotation;
 			item.isModified = false;
+			item.stableAnchors = ChapterSorter.inspectStableAnchors(finalContent);
 			updatedCount++;
 		}
 

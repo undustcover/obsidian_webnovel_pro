@@ -1,0 +1,196 @@
+
+<!doctype html>
+<html lang="en">
+
+<head>
+    <title>Code coverage report for console/application/EventCommands.ts</title>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="../../prettify.css" />
+    <link rel="stylesheet" href="../../base.css" />
+    <link rel="shortcut icon" type="image/x-icon" href="../../favicon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style type='text/css'>
+        .coverage-summary .sorter {
+            background-image: url(../../sort-arrow-sprite.png);
+        }
+    </style>
+</head>
+    
+<body>
+<div class='wrapper'>
+    <div class='pad1'>
+        <h1><a href="../../index.html">All files</a> / <a href="index.html">console/application</a> EventCommands.ts</h1>
+        <div class='clearfix'>
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">100% </span>
+                <span class="quiet">Statements</span>
+                <span class='fraction'>33/33</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">90% </span>
+                <span class="quiet">Branches</span>
+                <span class='fraction'>45/50</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">100% </span>
+                <span class="quiet">Functions</span>
+                <span class='fraction'>6/6</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">100% </span>
+                <span class="quiet">Lines</span>
+                <span class='fraction'>33/33</span>
+            </div>
+        
+            
+        </div>
+        <p class="quiet">
+            Press <em>n</em> or <em>j</em> to go to the next uncovered block, <em>b</em>, <em>p</em> or <em>k</em> for the previous block.
+        </p>
+        <template id="filterTemplate">
+            <div class="quiet">
+                Filter:
+                <input type="search" id="fileSearch">
+            </div>
+        </template>
+    </div>
+    <div class='status-line high'></div>
+    <pre><table class="coverage">
+<tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
+<a name='L2'></a><a href='#L2'>2</a>
+<a name='L3'></a><a href='#L3'>3</a>
+<a name='L4'></a><a href='#L4'>4</a>
+<a name='L5'></a><a href='#L5'>5</a>
+<a name='L6'></a><a href='#L6'>6</a>
+<a name='L7'></a><a href='#L7'>7</a>
+<a name='L8'></a><a href='#L8'>8</a>
+<a name='L9'></a><a href='#L9'>9</a>
+<a name='L10'></a><a href='#L10'>10</a>
+<a name='L11'></a><a href='#L11'>11</a>
+<a name='L12'></a><a href='#L12'>12</a>
+<a name='L13'></a><a href='#L13'>13</a>
+<a name='L14'></a><a href='#L14'>14</a>
+<a name='L15'></a><a href='#L15'>15</a>
+<a name='L16'></a><a href='#L16'>16</a>
+<a name='L17'></a><a href='#L17'>17</a>
+<a name='L18'></a><a href='#L18'>18</a>
+<a name='L19'></a><a href='#L19'>19</a>
+<a name='L20'></a><a href='#L20'>20</a>
+<a name='L21'></a><a href='#L21'>21</a>
+<a name='L22'></a><a href='#L22'>22</a>
+<a name='L23'></a><a href='#L23'>23</a>
+<a name='L24'></a><a href='#L24'>24</a>
+<a name='L25'></a><a href='#L25'>25</a>
+<a name='L26'></a><a href='#L26'>26</a>
+<a name='L27'></a><a href='#L27'>27</a>
+<a name='L28'></a><a href='#L28'>28</a>
+<a name='L29'></a><a href='#L29'>29</a>
+<a name='L30'></a><a href='#L30'>30</a>
+<a name='L31'></a><a href='#L31'>31</a>
+<a name='L32'></a><a href='#L32'>32</a>
+<a name='L33'></a><a href='#L33'>33</a>
+<a name='L34'></a><a href='#L34'>34</a>
+<a name='L35'></a><a href='#L35'>35</a>
+<a name='L36'></a><a href='#L36'>36</a>
+<a name='L37'></a><a href='#L37'>37</a>
+<a name='L38'></a><a href='#L38'>38</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">11x</span>
+<span class="cline-any cline-yes">11x</span>
+<span class="cline-any cline-yes">11x</span>
+<span class="cline-any cline-yes">11x</span>
+<span class="cline-any cline-yes">11x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">11x</span>
+<span class="cline-any cline-yes">11x</span>
+<span class="cline-any cline-yes">11x</span>
+<span class="cline-any cline-yes">11x</span>
+<span class="cline-any cline-yes">11x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">import { canTransitionEventStatus, canTransitionNarrativeStatus, canTransitionReaderState, type ChangePlan, type EventData, type EventStatus, type Importance, type NarrativeStatus, type ReaderState } from '../domain';
+import type { EventRepository } from '../persistence';
+&nbsp;
+type TimelineTarget = 'reality' | 'hidden_world' | 'cosmic' | `character:${string}` | `organization:${string}`;
+&nbsp;
+export class EventCommandService {
+	constructor(private repository: EventRepository) {}
+	async updateTimelineImportance(eventId: string, target: TimelineTarget, importance: Importance, requestedAt?: string): Promise&lt;ChangePlan&gt; {
+		const current = this.repository.read(eventId); if (!current) <span class="branch-0 cbranch-no" title="branch not covered" >throw new Error('EVENT_NOT_FOUND');</span>
+		const data: EventData = structuredClone(current.data); const [kind, id] = target.split(':');
+		if (kind === 'reality') data.timelineViews.reality = { visible: data.timelineViews.reality?.<span class="branch-0 cbranch-no" title="branch not covered" >visible ?? true, i</span>mportance };
+		else if (kind === 'hidden_world') data.timelineViews.hiddenWorld = { visible: data.timelineViews.hiddenWorld?.<span class="branch-0 cbranch-no" title="branch not covered" >visible ?? true, i</span>mportance };
+		else if (kind === 'cosmic') data.timelineViews.cosmic = { visible: data.timelineViews.<span class="branch-0 cbranch-no" title="branch not covered" >cosmic?.visible ?? t</span>rue, importance };
+		else if (kind === 'character' &amp;&amp; id) data.timelineViews.characters[id] = importance;
+		else if (kind === 'organization' &amp;&amp; id) data.timelineViews.organizations[id] = importance;
+		else throw new Error('INVALID_TIMELINE_VIEW');
+		const before = kind === 'character' ? current.data.timelineViews.characters[id] : kind === 'organization' ? current.data.timelineViews.organizations[id] : kind === 'hidden_world' ? current.data.timelineViews.hiddenWorld?.importance : current.data.timelineViews[kind]?.importance;
+		const plan = await this.repository.planUpdate(eventId, data, requestedAt, 'update-timeline-importance');
+		plan.fieldDiffs = [{ path: current.record.source.path, field: `timeline_views.${target}.importance`, before, after: importance }];
+		return plan;
+	}
+	async updateEventStatus(eventId: string, to: EventStatus, requestedAt?: string): Promise&lt;ChangePlan&gt; { return this.updateState(eventId, 'eventStatus', to, requestedAt); }
+	async updateNarrativeStatus(eventId: string, to: NarrativeStatus, requestedAt?: string): Promise&lt;ChangePlan&gt; { return this.updateState(eventId, 'narrativeStatus', to, requestedAt); }
+	async updateReaderState(eventId: string, to: ReaderState, requestedAt?: string): Promise&lt;ChangePlan&gt; { return this.updateState(eventId, 'readerState', to, requestedAt); }
+	private async updateState(eventId: string, field: 'eventStatus' | 'narrativeStatus' | 'readerState', to: EventStatus | NarrativeStatus | ReaderState, requestedAt?: string): Promise&lt;ChangePlan&gt; {
+		const current = this.repository.read(eventId); if (!current) <span class="branch-0 cbranch-no" title="branch not covered" >throw new Error('EVENT_NOT_FOUND');</span>
+		const from = current.data[field];
+		const allowed = field === 'eventStatus' ? canTransitionEventStatus(from as EventStatus | 'unknown', to as EventStatus) : field === 'narrativeStatus' ? canTransitionNarrativeStatus(from as NarrativeStatus | 'unknown', to as NarrativeStatus) : canTransitionReaderState(from as ReaderState | 'unknown', to as ReaderState);
+		if (!allowed) throw new Error(`EVENT_STATE_TRANSITION_NOT_ALLOWED:${field}:${from}-&gt;${to}`);
+		if (field === 'eventStatus' &amp;&amp; to === 'occurring' &amp;&amp; !current.data.storyTime) throw new Error('EVENT_TIME_REQUIRED_FOR_OCCURRING');
+		const data = structuredClone(current.data); (data as unknown as Record&lt;string, unknown&gt;)[field] = to;
+		const type = field === 'eventStatus' ? 'update-event-status' : field === 'narrativeStatus' ? 'update-narrative-status' : 'update-reader-state';
+		const plan = await this.repository.planUpdate(eventId, data, requestedAt, type);
+		plan.fieldDiffs = [{ path: current.record.source.path, field: field === 'eventStatus' ? 'event_status' : field === 'narrativeStatus' ? 'narrative_status' : 'reader_state', before: from, after: to }];
+		return plan;
+	}
+}
+&nbsp;</pre></td></tr></table></pre>
+
+                <div class='push'></div><!-- for sticky footer -->
+            </div><!-- /wrapper -->
+            <div class='footer quiet pad2 space-top1 center small'>
+                Code coverage generated by
+                <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
+                at 2026-09-11T09:34:06.164Z
+            </div>
+        <script src="../../prettify.js"></script>
+        <script>
+            window.onload = function () {
+                prettyPrint();
+            };
+        </script>
+        <script src="../../sorter.js"></script>
+        <script src="../../block-navigation.js"></script>
+    </body>
+</html>
+    

@@ -37,6 +37,16 @@ interface CustomRuleMatch {
 	structureLength: number;
 }
 
+export interface StableChapterAnchors {
+	chapterId?: string;
+	referenceIds: readonly string[];
+}
+
+const PERMANENT_ID_LINE = /^(?:id|ID|永久ID|永久_id)\s*:/;
+const CHAPTER_RELATION_LINE = /^(?:event_ids|revision_ids|chapter_ids|事件|关联事件|修订)\s*:/;
+const STABLE_REFERENCE_ID = /\b(?:EVT|TSK|FSH)-\d{4,}\b/g;
+const CHAPTER_ID_VALUE = /^(?:id|ID|永久ID|永久_id)\s*:\s*["']?(CH-\d{4,})["']?\s*(?:#.*)?$/;
+
 /**
  * 章节排序服务
  * 
@@ -54,6 +64,56 @@ export class ChapterSorter {
 	// 自定义章节命名规则（由插件设置提供）
 	private static customRules: ChapterNamingRule[] = [];
 	private static _compiledRules: Array<{ rule: ChapterNamingRule; regex: RegExp; index: number }> = [];
+	private static readonly reservedChapterIds = new Set<string>();
+
+	/** Read the stable logical chapter ID and EVT/TSK/FSH anchors from YAML frontmatter only. */
+	static inspectStableAnchors(content: string): StableChapterAnchors {
+		const normalized = content.replace(/\r\n/g, '\n');
+		const match = /^---\n([\s\S]*?)\n(?:---|\.\.\.)(?:\n|$)/.exec(normalized);
+		if (!match) return { referenceIds: [] };
+		let chapterId: string | undefined;
+		const referenceIds = new Set<string>();
+		for (const line of match[1].split('\n')) {
+			chapterId ||= line.match(CHAPTER_ID_VALUE)?.[1];
+			for (const id of line.match(STABLE_REFERENCE_ID) || []) referenceIds.add(id);
+		}
+		return { chapterId, referenceIds: [...referenceIds].sort() };
+	}
+
+	/**
+	 * Prepare a chapter template for a split target. A template is never allowed to
+	 * clone its own permanent ID or concrete relationship anchors into the new chapter.
+	 */
+	static protectSplitTemplate(template: string, newChapterId?: string): string {
+		if (!template && !newChapterId) return template;
+		const newline = template.includes('\r\n') ? '\r\n' : '\n';
+		const normalized = template.replace(/\r\n/g, '\n');
+		const match = /^---\n([\s\S]*?)\n(---|\.\.\.)([\s\S]*)$/.exec(normalized);
+		if (!match) {
+			if (!newChapterId) return template;
+			return `---${newline}type: chapter${newline}id: ${newChapterId}${newline}---${newline}${newline}${template}`;
+		}
+		const kept = match[1].split('\n').filter(line =>
+			!PERMANENT_ID_LINE.test(line) && !CHAPTER_RELATION_LINE.test(line)
+		);
+		if (newChapterId) {
+			const typeIndex = kept.findIndex(line => /^\s*(?:type|对象类型|类型)\s*:/.test(line));
+			kept.splice(typeIndex >= 0 ? typeIndex + 1 : 0, 0, `id: ${newChapterId}`);
+		}
+		return (`---\n${kept.join('\n')}\n${match[2]}${match[3]}`).replace(/\n/g, newline);
+	}
+
+	/** Reserve a collision-free CH ID for chapter creation during this plugin session. */
+	static reserveNextChapterId(existingIds: Iterable<string>): string {
+		let max = 0;
+		for (const id of [...existingIds, ...this.reservedChapterIds]) {
+			const match = /^CH-(\d+)$/.exec(id);
+			if (match) max = Math.max(max, Number(match[1]));
+		}
+		const id = `CH-${String(max + 1).padStart(4, '0')}`;
+		this.reservedChapterIds.add(id);
+		return id;
+	}
 
 	/**
 	 * 判定文件是否为功能性文档（如作品信息、伏笔记录、时间线、限时任务、创作主页、设定集、合并章节产物等）

@@ -25,7 +25,8 @@ export interface ConsoleProjectConfig {
 }
 
 export interface ConsoleConfigDiagnostic {
-	code: 'CONFIG_INVALID_PROJECT' | 'CONFIG_DUPLICATE_PROJECT_ID' | 'CONFIG_DUPLICATE_ROOT';
+	code: 'CONFIG_INVALID_PROJECT' | 'CONFIG_DUPLICATE_PROJECT_ID' | 'CONFIG_DUPLICATE_ROOT' | 'CONFIG_LEGACY_WORKSPACE_DERIVED';
+	severity: 'info' | 'error';
 	index: number;
 	message: string;
 }
@@ -33,6 +34,7 @@ export interface ConsoleConfigDiagnostic {
 export interface NormalizedConsoleProjects {
 	projects: ConsoleProjectConfig[];
 	diagnostics: ConsoleConfigDiagnostic[];
+	source: 'none' | 'consoleProjects' | 'workspaceFolders';
 }
 
 export const DEFAULT_CONSOLE_DIRECTORIES: Readonly<ConsoleDirectories> = Object.freeze({
@@ -106,7 +108,7 @@ function normalizeProject(raw: unknown, index: number): ConsoleProjectConfig | n
 }
 
 export function normalizeConsoleProjects(raw: unknown): NormalizedConsoleProjects {
-	if (!Array.isArray(raw)) return { projects: [], diagnostics: [] };
+	if (!Array.isArray(raw)) return { projects: [], diagnostics: [], source: 'consoleProjects' };
 	const projects: ConsoleProjectConfig[] = [];
 	const diagnostics: ConsoleConfigDiagnostic[] = [];
 	const ids = new Set<string>();
@@ -114,22 +116,22 @@ export function normalizeConsoleProjects(raw: unknown): NormalizedConsoleProject
 	raw.forEach((value, index) => {
 		const project = normalizeProject(value, index);
 		if (!project) {
-			diagnostics.push({ code: 'CONFIG_INVALID_PROJECT', index, message: 'Project id and root are required.' });
+			diagnostics.push({ code: 'CONFIG_INVALID_PROJECT', severity: 'error', index, message: 'Project id and root are required.' });
 			return;
 		}
 		if (ids.has(project.projectId)) {
-			diagnostics.push({ code: 'CONFIG_DUPLICATE_PROJECT_ID', index, message: `Duplicate project id: ${project.projectId}` });
+			diagnostics.push({ code: 'CONFIG_DUPLICATE_PROJECT_ID', severity: 'error', index, message: `Duplicate project id: ${project.projectId}` });
 			return;
 		}
 		if (roots.has(project.root)) {
-			diagnostics.push({ code: 'CONFIG_DUPLICATE_ROOT', index, message: `Duplicate project root: ${project.root}` });
+			diagnostics.push({ code: 'CONFIG_DUPLICATE_ROOT', severity: 'error', index, message: `Duplicate project root: ${project.root}` });
 			return;
 		}
 		ids.add(project.projectId);
 		roots.add(project.root);
 		projects.push(project);
 	});
-	return { projects, diagnostics };
+	return { projects, diagnostics, source: 'consoleProjects' };
 }
 
 export function resolveConsoleProjects(settings: {
@@ -139,8 +141,11 @@ export function resolveConsoleProjects(settings: {
 }): NormalizedConsoleProjects {
 	const normalized = normalizeConsoleProjects(settings.consoleProjects);
 	if (normalized.projects.length > 0 || normalized.diagnostics.length > 0) return normalized;
+	const legacyRoots = (settings.workspaceFolders || []).filter((root): root is string => typeof root === 'string' && normalizePath(root).length > 0);
+	if (!legacyRoots.length) return { projects: [], diagnostics: [], source: 'none' };
 	return {
-		projects: (settings.workspaceFolders || []).map((root, index) => createDefaultConsoleProject(root, index, settings.loreFolderName || '设定系统')),
-		diagnostics: [],
+		projects: legacyRoots.map((root, index) => createDefaultConsoleProject(root, index, settings.loreFolderName || '设定系统')),
+		diagnostics: [{ code: 'CONFIG_LEGACY_WORKSPACE_DERIVED', severity: 'info', index: 0, message: 'Console projects were derived from legacy workspace folders.' }],
+		source: 'workspaceFolders',
 	};
 }

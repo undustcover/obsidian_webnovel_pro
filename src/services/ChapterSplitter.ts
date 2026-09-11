@@ -40,6 +40,16 @@ export interface ChapterSplitOptions {
 		recordChapterCreated(bookPath: string, path: string, title: string, source?: string): Promise<void>;
 	};
 	plugin?: CurrentBookContextPlugin;
+	allocateChapterId?: () => string | undefined;
+	onStableAnchorImpact?: (impact: {
+		operation: 'split';
+		sourcePath: string;
+		targetPath: string;
+		sourceChapterId?: string;
+		newChapterId?: string;
+		preservedAnchorIds: readonly string[];
+		message: string;
+	}) => void;
 }
 
 /**
@@ -400,7 +410,18 @@ export async function splitChapterAtCursor(options: ChapterSplitOptions): Promis
 			return false;
 		}
 
-		const combined = combineTemplateAndSuffix(templateContent, analysis.suffix);
+		const sourceAnchors = ChapterSorter.inspectStableAnchors(initialContent);
+		const newChapterId = options.allocateChapterId?.();
+		const protectedTemplate = ChapterSorter.protectSplitTemplate(templateContent, newChapterId);
+		const combined = combineTemplateAndSuffix(protectedTemplate, analysis.suffix);
+		options.onStableAnchorImpact?.({
+			operation: 'split', sourcePath: initialFilePath, targetPath,
+			sourceChapterId: sourceAnchors.chapterId, newChapterId,
+			preservedAnchorIds: sourceAnchors.referenceIds,
+			message: sourceAnchors.referenceIds.length
+				? '源章关系锚点保持不动；请由作者确认是否把正文移动映射到新章。'
+				: '源章没有 EVT/TSK/FSH 关系锚点；新章使用独立永久 ID。'
+		});
 
 		let newFile: TFile;
 		try {

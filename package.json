@@ -1,6 +1,6 @@
 {
 	"name": "web-novel-assistant",
-	"version": "3.9.5",
+	"version": "0.21.9",
 	"description": "An all-in-one writing studio for novel and story writers — accurate word count, goal tracking, story timeline, foreshadowing manager, chapter corkboard, and lore graphs",
 	"main": "main.js",
 	"scripts": {
@@ -11,10 +11,14 @@
 		"dev": "concurrently \"npm:dev:js\" \"npm:dev:css\"",
 		"type-check": "tsc --noEmit",
 		"prebuild": "npm run type-check && npm run lint",
-		"build": "esbuild main.ts --bundle --format=cjs --external:obsidian --external:@codemirror/* --minify --outfile=main.js",
+		"build": "node scripts/build-plugin.mjs",
 		"test": "vitest run",
 		"test:coverage": "vitest run --coverage",
 		"test:watch": "vitest",
+		"benchmark:console": "tsx scripts/console-large-vault-benchmark.ts",
+		"audit:console-errors": "tsx scripts/console-error-feedback-audit.ts",
+		"prepare:console-smoke": "tsx scripts/prepare-console-smoke-vaults.ts",
+		"verify:artifact": "node scripts/verify-plugin-artifacts.mjs",
 		"lint": "npm run check:css && eslint --max-warnings=0 src/ main.ts && tsx scripts/obsidian-audit.ts && tsx scripts/i18n-audit.ts"
 	},
 	"keywords": [

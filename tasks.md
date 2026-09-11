@@ -576,7 +576,7 @@
 
 ## Wave 4：事件、里程碑与推进
 
-- [ ] P0-040 实现事件真相模型与仓储
+- [x] P0-040 实现事件真相模型与仓储
   - 依赖：P0-012、P0-022
   - 修改文件：`src/console/domain/events.ts`
   - 新增文件：`src/console/persistence/EventRepository.ts`、测试
@@ -586,9 +586,9 @@
   - 单元测试：持续事件、空结束、跨 calendar、读写 round-trip
   - 集成验收：EVT 属性可安全读写
   - 完成证据：event repository tests
-  - 完成记录：
+  - 完成记录：已实现 EVT 核心字段规范化读取、持续事件/空结束、跨历法原值保留，以及 plan-create/plan-update；更新只写 EVT 权威文件并保留正文，章节映射仅作为事件侧 ID 列表
 
-- [ ] P0-041 实现多时间轴投影与事件页面
+- [x] P0-041 实现多时间轴投影与事件页面
   - 依赖：P0-040、P0-025
   - 修改文件：无
   - 新增文件：TimelineProjectionQuery/EventControlPage/测试
@@ -598,9 +598,9 @@
   - 单元测试：多视图、归档、不可比时间分组
   - 集成验收：AC-10
   - 完成证据：timeline projection tests
-  - 完成记录：
+  - 完成记录：已由单一 IndexSnapshot 将同一 EVT 投影到现实、隐藏、宇宙、人物、组织和归档视图；跨历法分组并明确提示不可比较，事件页不创建副本
 
-- [ ] P0-042 实现视图独立重要度命令
+- [x] P0-042 实现视图独立重要度命令
   - 依赖：P0-041、P0-028
   - 修改文件：无
   - 新增文件：UpdateTimelineImportanceCommand/测试
@@ -610,9 +610,9 @@
   - 单元测试：reality/hidden/character/organization diff 隔离
   - 集成验收：AC-11
   - 完成证据：field diff tests
-  - 完成记录：
+  - 完成记录：已实现 reality/hidden/cosmic/character/organization 目标视图更新，ChangePlan 仅包含目标 `timeline_views.<view>.importance` 字段 diff，其他视图值保持不变
 
-- [ ] P0-043 实现三状态展示与独立命令
+- [x] P0-043 实现三状态展示与独立命令
   - 依赖：P0-040、P0-028
   - 修改文件：无
   - 新增文件：event state commands/components/tests
@@ -622,9 +622,9 @@
   - 单元测试：所有允许/拒绝转换、字段 diff 隔离
   - 集成验收：AC-12
   - 完成证据：event-state tests
-  - 完成记录：
+  - 完成记录：事件投影同时独立展示事实、叙事、读者状态；三个命令分别校验冻结状态机并只产生单字段 diff，`reader_state: unknown` 按合法知识状态处理
 
-- [ ] P0-044 实现事件依赖图、环检测与最短距离
+- [x] P0-044 实现事件依赖图、环检测与最短距离
   - 依赖：P0-040、P0-017
   - 修改文件：无
   - 新增文件：`src/console/application/EventGraph.ts`、测试
@@ -634,9 +634,9 @@
   - 单元测试：DAG、环、自环、diamond、跨线、缺边
   - 集成验收：结果确定且可解释
   - 完成证据：graph tests
-  - 完成记录：
+  - 完成记录：已实现前置到后继的确定性图与 BFS 最短距离；DAG/diamond 返回数值，环、自环、缺边、跨线、不可达和缺事件返回带 reason 的 indeterminate
 
-- [ ] P0-045 实现里程碑条件求值
+- [x] P0-045 实现里程碑条件求值
   - 依赖：P0-040、P0-044
   - 修改文件：`src/console/domain/milestones.ts`
   - 新增文件：MilestoneEvaluator/测试
@@ -646,9 +646,9 @@
   - 单元测试：四模式、缺事件、不可比、顺序错误
   - 集成验收：AC-13 计算部分
   - 完成证据：table-driven tests
-  - 完成记录：
+  - 完成记录：已实现 all/any/sequence/manual 表驱动求值；缺事件或 sequence 无可比顺序返回 indeterminate，只产生 completion_ready 等读结果，不写 completed
 
-- [ ] P0-046 实现多剧情线游标与系统建议
+- [x] P0-046 实现多剧情线游标与系统建议
   - 依赖：P0-033、P0-044
   - 修改文件：无
   - 新增文件：CursorQuery/CursorSuggestionService/commands/tests
@@ -658,9 +658,9 @@
   - 单元测试：多线切换、唯一焦点、无路径建议
   - 集成验收：AC-14/15
   - 完成证据：cursor tests
-  - 完成记录：
+  - 完成记录：已读取并恢复多剧情线游标，打开同线事件时以事件图派生稳定建议；无路径保留解释且零写入，正式游标更新生成高风险 ChangePlan
 
-- [ ] P0-047 实现推进影响分析
+- [x] P0-047 实现推进影响分析
   - 依赖：P0-020、P0-043、P0-045、P0-046
   - 修改文件：无
   - 新增文件：`src/console/application/ProgressionImpactAnalyzer.ts`、测试
@@ -670,9 +670,9 @@
   - 单元测试：任务/伏笔/人物/物品/知识/章节/上下文/行动
   - 集成验收：AC-16
   - 完成证据：impact tests
-  - 完成记录：
+  - 完成记录：已基于候选计划和同一 IndexSnapshot 生成固定全类别 ImpactReport，覆盖入/出链、事件、任务、伏笔、人物、物品、知识、章节、上下文、健康、行动与 unknown risks，空类别显式为空数组
 
-- [ ] P0-048 实现作者确认式推进
+- [x] P0-048 实现作者确认式推进
   - 依赖：P0-022、P0-028、P0-047
   - 修改文件：无
   - 新增文件：event/cursor/milestone progression commands/tests
@@ -682,11 +682,11 @@
   - 单元测试：确认前零写、token、并发、撤销边界
   - 集成验收：阶段 4 完整演示
   - 完成证据：progression integration tests
-  - 完成记录：
+  - 完成记录：事件状态、剧情线游标、里程碑状态均通过 ChangePlan + ImpactReport + plan-bound 一次性 token + 并发校验执行；确认前零写入，游标限定撤销明确不回滚其他已确认事实
 
 ## Wave 5：任务、伏笔、人物、物品与健康
 
-- [ ] P0-050 实现 TSK 模型与仓储
+- [x] P0-050 实现 TSK 模型与仓储
   - 依赖：P0-012、P0-022、P0-044
   - 修改文件：`src/console/domain/tasks.ts`
   - 新增文件：CreativeTaskRepository/commands/tests
@@ -696,9 +696,9 @@
   - 单元测试：六 relation、related/activation 分离、状态转换
   - 集成验收：AC-18
   - 完成证据：task tests
-  - 完成记录：
+  - 完成记录：已实现新格式 TSK 解析、创建/更新/删除/状态 ChangePlan、六种 activation 与拒绝路径；删除为高风险确认操作，旧限时任务保持只读
 
-- [ ] P0-051 实现行动分组算法
+- [x] P0-051 实现行动分组算法
   - 依赖：P0-045、P0-046、P0-050
   - 修改文件：无
   - 新增文件：ActionProjectionService/测试
@@ -708,9 +708,9 @@
   - 单元测试：优先级、距离边界、越过、无效/跨线/环
   - 集成验收：AC-19/20/21
   - 完成证据：action-group tests
-  - 完成记录：
+  - 完成记录：已按游标、事件图距离、锚点关系和状态输出五类行动组；无效、跨线、环与需确认条件均 fail-closed
 
-- [ ] P0-052 聚合旧限时任务
+- [x] P0-052 聚合旧限时任务
   - 依赖：P0-014、P0-051
   - 修改文件：ActionProjectionService
   - 新增文件：legacy/new aggregate tests
@@ -720,9 +720,9 @@
   - 单元测试：同名、过期、字数、排序
   - 集成验收：旧任务继续按日期工作
   - 完成证据：aggregate tests
-  - 完成记录：
+  - 完成记录：已将 LegacyTimedTaskAdapter 结果并入统一 ActionItem，保留 legacy-timed-task 来源与既有日期语义
 
-- [ ] P0-053 实现系统建议决策持久化
+- [x] P0-053 实现系统建议决策持久化
   - 依赖：P0-022、P0-051
   - 修改文件：无
   - 新增文件：SuggestionService/DecisionRepository/commands/tests
@@ -732,9 +732,9 @@
   - 单元测试：幂等身份、latest decision、延后、忽略、不适用
   - 集成验收：AC-22
   - 完成证据：suggestion tests
-  - 完成记录：
+  - 完成记录：已实现确定性建议 ID、latest decision、五种决策日志；仅 converted_to_task 合并任务创建与决策写入并要求确认
 
-- [ ] P0-054 实现新伏笔事件锚点 adapter 与命令
+- [x] P0-054 实现新伏笔事件锚点 adapter 与命令
   - 依赖：P0-014、P0-022、P0-046
   - 修改文件：无
   - 新增文件：ForeshadowingPropertiesAdapter/commands/tests
@@ -744,9 +744,9 @@
   - 单元测试：多锚点、坏锚点、旧格式并存
   - 集成验收：补全必有预览
   - 完成证据：foreshadowing adapter tests
-  - 完成记录：
+  - 完成记录：已实现 truth/plant/advance/reveal 稳定锚点解析与受控字段更新；旧格式写入明确拒绝且不会自动升级
 
-- [ ] P0-055 实现伏笔接近与错过规则
+- [x] P0-055 实现伏笔接近与错过规则
   - 依赖：P0-051、P0-054
   - 修改文件：无
   - 新增文件：ForeshadowingActionRules/测试
@@ -756,9 +756,9 @@
   - 单元测试：三类锚点、接近、越过、跨线、unknown
   - 集成验收：AC-23
   - 完成证据：FSH rule tests
-  - 完成记录：
+  - 完成记录：已按游标和图距离生成接近/错过诊断，跨线、不可达和 unknown 不被误判为自动状态变化
 
-- [ ] P0-056 完成行动导向总览
+- [x] P0-056 完成行动导向总览
   - 依赖：P0-039、P0-052、P0-053、P0-055
   - 修改文件：DashboardPage/Query
   - 新增文件：dashboard integration tests
@@ -768,9 +768,9 @@
   - 单元测试：分组展开、操作、来源/原因/锚点/影响
   - 集成验收：每个行动项信息完整
   - 完成证据：dashboard tests/screenshots
-  - 完成记录：
+  - 完成记录：Dashboard 已汇总焦点、五类行动、关键事件、上下文与健康摘要，并展示来源、原因和锚点；now/missed 默认展开
 
-- [ ] P0-057 实现人物中心基础版
+- [x] P0-057 实现人物中心基础版
   - 依赖：P0-017、P0-035、P0-041
   - 修改文件：无
   - 新增文件：CharacterCenterQuery/Page/只读经历线/tests
@@ -780,9 +780,9 @@
   - 单元测试：列表筛选、经历排序、缺关系、白名单
   - 集成验收：AC-08 人物部分
   - 完成证据：character tests
-  - 完成记录：
+  - 完成记录：已提供人物详情查询与 Console 详情入口，投影参与事件/章节、按叙事时间排序并显示位置冲突和原文来源
 
-- [ ] P0-058 实现道具中心基础版
+- [x] P0-058 实现道具中心基础版
   - 依赖：P0-017、P0-035、P0-041
   - 修改文件：无
   - 新增文件：ItemCenterQuery/Page/flow projection/tests
@@ -792,9 +792,9 @@
   - 单元测试：合法转移、多持有、状态未更新
   - 集成验收：AC-08 道具部分
   - 完成证据：item tests
-  - 完成记录：
+  - 完成记录：已提供道具详情查询与 Console 详情入口，投影持有历史、当前持有者、事件/章节并报告多持有冲突
 
-- [ ] P0-059 实现健康规则框架与结构规则
+- [x] P0-059 实现健康规则框架与结构规则
   - 依赖：P0-017、P0-019
   - 修改文件：`src/console/domain/diagnostics.ts`
   - 新增文件：HealthRuleRegistry/结构 rules/tests
@@ -804,9 +804,9 @@
   - 单元测试：每一结构 Rule ID 对应 fixture
   - 集成验收：增量重算只影响相关实体
   - 完成证据：health/structure tests
-  - 完成记录：
+  - 完成记录：已冻结 34 个稳定 Rule ID，建立统一注册表、证据与严重度输出；事实类问题不提供自动裁决
 
-- [ ] P0-060 实现事件与连续性规则
+- [x] P0-060 实现事件与连续性规则
   - 依赖：P0-044、P0-057、P0-058、P0-059
   - 修改文件：无
   - 新增文件：event/continuity rules/tests
@@ -816,9 +816,9 @@
   - 单元测试：每一对应 Rule ID 与证据定位
   - 集成验收：需求 20.2 全覆盖
   - 完成证据：health/continuity tests
-  - 完成记录：
+  - 完成记录：已覆盖事件依赖/时间/跨线/章节映射及人物位置、状态、物品持有和所有权连续性诊断
 
-- [ ] P0-061 实现任务、伏笔与推进规则
+- [x] P0-061 实现任务、伏笔与推进规则
   - 依赖：P0-051、P0-055、P0-059
   - 修改文件：无
   - 新增文件：progression rules/tests
@@ -828,9 +828,9 @@
   - 单元测试：六类规则、长期忽略、错误激活
   - 集成验收：需求 20.3 全覆盖
   - 完成证据：health/progression tests
-  - 完成记录：
+  - 完成记录：已覆盖任务锚点无效/越过、伏笔接近/错过、隐藏历史误激活及长期忽略建议仍相关等推进诊断
 
-- [ ] P0-062 实现资料健康页与总览摘要
+- [x] P0-062 实现资料健康页与总览摘要
   - 依赖：P0-056、P0-059、P0-060、P0-061
   - 修改文件：DashboardQuery/Page
   - 新增文件：HealthPage/测试
@@ -840,11 +840,11 @@
   - 单元测试：筛选、定位、auto-fix whitelist、键盘
   - 集成验收：AC-28
   - 完成证据：health page tests
-  - 完成记录：
+  - 完成记录：已实现四级筛选、Rule ID/证据定位、安全修复白名单展示，并接入 Console 健康路由与 Dashboard 摘要
 
 ## Wave 6：兼容、性能与发布验收
 
-- [ ] P0-070 加固拆分、合并与排序稳定锚点
+- [x] P0-070 加固拆分、合并与排序稳定锚点
   - 依赖：P0-015、P0-047、P0-054
   - 修改文件：`src/services/ChapterSplitter.ts`、`ChapterMergeManager.ts`、`ChapterSorter.ts`
   - 新增文件：`tests/console/stable-anchors.test.ts`
@@ -854,7 +854,7 @@
   - 单元测试：拆/合/插/排、模板复制 ID 防护
   - 集成验收：AC-17
   - 完成证据：stable-anchor tests
-  - 完成记录：
+  - 完成记录：拆分新章会分配会话内保留且与索引/MetadataCache 查重的 `CH-*`，模板永久 ID 与具体关系锚点不复制；源章 EVT/TSK/FSH 锚点保持并输出影响建议；合并整批预检并发锚点变更；排序不改 Markdown。专项 6 项测试通过
 
 - [ ] P0-071 完成旧能力回归矩阵
   - 依赖：P0-056、P0-062、P0-070
@@ -866,7 +866,7 @@
   - 单元测试：完整现有 test suite
   - 集成验收：逐项 smoke
   - 完成证据：AC-30 记录
-  - 完成记录：
+  - 完成记录：自动回归矩阵已建立，完整测试 98 文件/1081 项通过；仍待真实 Obsidian 中逐项 smoke，任务保持未完成
 
 - [ ] P0-072 完成 CSS、主题、窄 Leaf 与无障碍验收
   - 依赖：P0-026、P0-027、P0-062
@@ -878,9 +878,9 @@
   - 单元测试：CSS audit/UI accessibility tests
   - 集成验收：核心状态非仅颜色、操作不消失
   - 完成证据：AC-02/03 证据
-  - 完成记录：
+  - 完成记录：CSS 作用域、宽中窄布局、键盘原生控件、文本状态与减少动画共 5 项自动检查通过；仍待主题与 100/125/150% 缩放截图，任务保持未完成
 
-- [ ] P0-073 完成大型 Vault 性能验收
+- [x] P0-073 完成大型 Vault 性能验收
   - 依赖：P0-018、P0-019、P0-062
   - 修改文件：按数据优化索引实现
   - 新增文件：benchmark runner、`doc/console-v0.21/evidence/AC-32.md`
@@ -890,9 +890,9 @@
   - 单元测试：扫描计数与 50-batch yield
   - 集成验收：AC-32；不满足则提交范围变更
   - 完成证据：设备信息与 benchmark 报告
-  - 完成记录：
+  - 完成记录：确定性 fixture 已在系统临时目录物化为 10k Markdown 后执行基准并清理；初建（含文件读取）847.18ms、增量 P95 47.53ms、搜索 P95 2.28ms，每 50 文件让出一次事件循环（200 次），见 AC-32 证据
 
-- [ ] P0-074 完成故障与数据完整性演练
+- [x] P0-074 完成故障与数据完整性演练
   - 依赖：P0-022、P0-038、P0-062
   - 修改文件：按演练缺陷修复
   - 新增文件：故障演练报告
@@ -902,7 +902,7 @@
   - 单元测试：failure injection suite
   - 集成验收：上一上下文可恢复、Markdown 事实完好
   - 完成证据：`doc/console-v0.21/evidence/AC-29-31.md`
-  - 完成记录：
+  - 完成记录：缓存损坏、并发修改、写入失败逆序补偿、补偿冲突人工恢复、索引发布失败与 MD+JSON 第二写失败均由 failure-injection tests 验证，事实文件与上一版上下文保持可恢复
 
 - [ ] P0-075 执行 32 条 P0 最终验收
   - 依赖：P0-071、P0-072、P0-073、P0-074

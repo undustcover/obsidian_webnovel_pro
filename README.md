@@ -42,6 +42,13 @@
 
 ## ✨ 功能一览
 
+### 🧭 小说控制台 V0.21（桌面端）
+<sub>统一总览 · 五级叙事导航 · 正文/事件/里程碑/任务管理 · 多时间轴 · 上下文生成 · 资料健康检查</sub>
+
+小说控制台以 Markdown 为唯一事实源，可从新格式与既有章节、时间线、伏笔、设定和限时任务中建立只读索引。高风险修改会先展示变更计划和影响范围，确认后才写入；首次索引不会批量改写笔记。控制台入口仅在桌面端显示，原有移动端能力不受影响。
+
+版本口径：**V0.21 是小说控制台功能规格版本，对应插件发布版本 0.21.9（Git 标签 V0.219）**；插件运行版本始终以 `manifest.json` 为准，`package.json` 必须与其一致，`versions.json` 记录该插件版本所需的最低 Obsidian 版本（当前为 1.8.7）。
+
 ### 🏠 创作主页
 <sub>全宽仪表盘 · 动态欢迎语 · 作品总览 · 数据面板 · 一键新建与导入作品</sub>
 
@@ -112,10 +119,81 @@
 
 ## 🚀 快速开始
 
-1. **安装插件** → 打开任意 Markdown 文件
-2. **状态栏**显示实时字数 → 点击设置目标
-3. **命令面板** `Ctrl/Cmd+P` → 搜索 "WebNovel"
-4. **设置** → 自定义各项功能
+### 普通用户：安装后直接使用
+
+使用社区插件市场、BRAT 或 Release 手动安装时，**不需要安装 Node.js 或任何依赖**。
+
+1. 在 Obsidian 中启用 **WebNovel Assistant**，打开或创建一个 Vault。
+2. 打开任意 Markdown 文件，状态栏会显示实时字数；点击字数可设置目标。
+3. 按 `Ctrl/Cmd+P` 打开命令面板，搜索 `WebNovel` 使用工作台、时间线、伏笔、沉浸写作等功能。
+4. 桌面端可运行 **打开小说控制台**。如果“小说控制台项目映射”保持空数组，插件会从现有“工作区文件夹”自动派生项目；修改显式映射后需重载 Obsidian。
+5. 在 **设置 → WebNovel Assistant** 中配置章节规则、目标、目录和其他功能。
+
+### 开发者：从源码快速启动
+
+#### 环境依赖
+
+- [Node.js 20 LTS](https://nodejs.org/)（与发布流水线一致，安装时会自带 npm）
+- npm 10 或更高版本
+- Obsidian 1.8.7 或更高版本
+- Git（仅克隆仓库时需要）
+
+本项目以 `package-lock.json` 为依赖锁文件，推荐使用 npm。普通开发不要混用 pnpm、Yarn 与 npm，以免生成不同的依赖树。
+
+最快的本地加载方式，是直接把源码克隆到测试 Vault 的插件目录：
+
+```bash
+cd <你的-Vault>/.obsidian/plugins
+git clone https://github.com/HatanoChihiro/obsidian-webnovel-assistant.git web-novel-assistant
+cd web-novel-assistant
+npm ci
+npm run dev
+```
+
+`npm ci` 会严格按锁文件安装开发依赖；`npm run dev` 会同时监听 TypeScript 和 CSS，并生成 Obsidian 实际加载的 `main.js` 与 `styles.css`。保持该终端运行，然后：
+
+1. 打开 Obsidian 的 **设置 → 第三方插件**。
+2. 关闭安全模式，并启用 **WebNovel Assistant**。
+3. 插件已启用时，在代码重新构建后重载 Obsidian，或先关闭再重新启用插件。
+
+如果源码不在 Vault 内，也可以执行 `npm ci && npm run build`，然后把以下三个文件复制到 `<Vault>/.obsidian/plugins/web-novel-assistant/`：
+
+```text
+main.js
+manifest.json
+styles.css
+```
+
+注意目录不能多嵌套一层；`manifest.json` 必须直接位于 `web-novel-assistant` 文件夹中。
+
+复制后可执行只读校验（脚本不会覆盖或删除 Vault 文件）：
+
+```bash
+npm run verify:artifact -- --build . --installed "<你的-Vault>/.obsidian/plugins/web-novel-assistant"
+```
+
+退出码 `0` 表示版本、必需文件和 SHA-256 全部一致；`2` 表示缺少文件；`3` 表示文件 hash 或版本不一致。不要把 `node_modules`、`.git`、`src`、`tests` 或 `coverage` 当作发布包复制到 Vault。
+
+#### 常用开发命令
+
+| 命令 | 用途 |
+|---|---|
+| `npm ci` | 按锁文件进行干净、可复现的依赖安装 |
+| `npm run dev` | 同时监听 JS 与 CSS，适合本地开发 |
+| `npm run build` | 类型检查、lint 后生成压缩的发布构建 |
+| `npm run type-check` | 仅运行 TypeScript 检查 |
+| `npm run lint` | CSS、ESLint、Obsidian API 和 i18n 审计 |
+| `npm test` | 运行完整测试套件 |
+| `npm run test:coverage` | 运行测试并检查覆盖率门槛 |
+| `npm run benchmark:console` | 物化临时 10k Vault 并运行控制台性能基准；结束后自动清理 |
+
+#### 依赖安装故障排查
+
+- 提示 `npm` 或 `node` 不存在：安装 Node.js 20 LTS 后重新打开终端，运行 `node --version` 和 `npm --version` 确认。
+- Windows PowerShell 阻止执行 `npm.ps1`：改用 `npm.cmd ci`、`npm.cmd run dev`，或使用命令提示符。
+- 出现 `Cannot find module`：确认当前目录包含 `package.json`，然后重新运行 `npm ci`。
+- pnpm 提示未批准 `esbuild` 安装脚本：切换回本项目锁定的 npm 流程并运行 `npm ci`。
+- Obsidian 找不到插件：确认目录是 `.obsidian/plugins/web-novel-assistant/`，且其中直接包含 `main.js`、`manifest.json`、`styles.css`，随后重载 Obsidian。
 
 <details>
 <summary><kbd>🎯 主要命令</kbd></summary>
@@ -245,6 +323,13 @@ If this plugin helps with your writing, consider supporting the author. Your sup
 
 ## ✨ Feature Highlights
 
+### 🧭 Novel Console V0.21 (Desktop)
+<sub>Unified overview · Five-level narrative navigation · Manuscript/event/milestone/task management · Multiple timelines · Context generation · Data health checks</sub>
+
+The Novel Console treats Markdown as the sole source of truth and builds a read-only index from both the new schema and existing chapters, timelines, foreshadowing notes, lore, and timed tasks. High-risk changes show a change plan and impact report before confirmation, and initial indexing never bulk-rewrites notes. The Console entry is desktop-only; existing mobile features remain available.
+
+Version policy: **V0.21 is the Novel Console feature-spec version and maps to plugin release 0.21.9 (Git tag V0.219)**. The runtime plugin version is authoritative in `manifest.json`, `package.json` must match it, and `versions.json` maps that release to its minimum supported Obsidian version (currently 1.8.7).
+
 ### 🏠 Creative Homepage
 <sub>Full-width Dashboard · Dynamic Welcome · Novel Overview · Stats Panel · One-Click New Novel & Import Novel</sub>
 
@@ -315,10 +400,81 @@ If this plugin helps with your writing, consider supporting the author. Your sup
 
 ## 🚀 Quick Start
 
-1. **Install** → open any Markdown file
-2. **Status bar** shows live word count → click to set a goal
-3. **Command Palette** `Ctrl/Cmd+P` → search "WebNovel"
-4. **Settings** → customize each feature
+### Users: start immediately after installation
+
+Community Plugins, BRAT, and release builds require **no Node.js installation or dependency setup**.
+
+1. Enable **WebNovel Assistant** and open or create an Obsidian vault.
+2. Open any Markdown file. The status bar shows the live word count; click it to set a goal.
+3. Open the Command Palette with `Ctrl/Cmd+P`, then search for `WebNovel` to access the workbench, timeline, foreshadowing tools, and immersive writing mode.
+4. On desktop, run **Open Novel Console**. An empty “Novel Console Project Mappings” array derives projects from the existing workspace folders; reload Obsidian after changing an explicit mapping.
+5. Configure chapter rules, goals, folders, and other features under **Settings → WebNovel Assistant**.
+
+### Developers: run from source
+
+#### Prerequisites
+
+- [Node.js 20 LTS](https://nodejs.org/) (matches the release workflow and includes npm)
+- npm 10 or newer
+- Obsidian 1.8.7 or newer
+- Git, when cloning the repository
+
+`package-lock.json` is the authoritative dependency lockfile. Use npm for normal development and avoid mixing pnpm, Yarn, and npm dependency trees.
+
+The shortest local setup is to clone the repository directly into a test vault's plugin directory:
+
+```bash
+cd <your-vault>/.obsidian/plugins
+git clone https://github.com/HatanoChihiro/obsidian-webnovel-assistant.git web-novel-assistant
+cd web-novel-assistant
+npm ci
+npm run dev
+```
+
+`npm ci` installs the exact locked development dependencies. `npm run dev` watches TypeScript and CSS and generates the `main.js` and `styles.css` files loaded by Obsidian. Keep the terminal running, then:
+
+1. Open **Settings → Community plugins** in Obsidian.
+2. Turn off Restricted mode and enable **WebNovel Assistant**.
+3. After a rebuild, reload Obsidian or disable and re-enable the plugin.
+
+If the source repository is outside the vault, run `npm ci && npm run build`, then copy these files into `<Vault>/.obsidian/plugins/web-novel-assistant/`:
+
+```text
+main.js
+manifest.json
+styles.css
+```
+
+Do not add another nested directory: `manifest.json` must be directly inside the `web-novel-assistant` directory.
+
+After copying, run the read-only verifier below. It never overwrites or deletes Vault files:
+
+```bash
+npm run verify:artifact -- --build . --installed "<your-Vault>/.obsidian/plugins/web-novel-assistant"
+```
+
+Exit code `0` means the version, required files, and SHA-256 hashes all match; `2` means a required file is missing; `3` means a hash or version differs. Do not copy `node_modules`, `.git`, `src`, `tests`, or `coverage` as part of a release package.
+
+#### Development commands
+
+| Command | Purpose |
+|---|---|
+| `npm ci` | Install dependencies reproducibly from the lockfile |
+| `npm run dev` | Watch JS and CSS during local development |
+| `npm run build` | Type-check, lint, and create a minified release build |
+| `npm run type-check` | Run TypeScript checks only |
+| `npm run lint` | Run CSS, ESLint, Obsidian API, and i18n audits |
+| `npm test` | Run the complete test suite |
+| `npm run test:coverage` | Run tests and enforce coverage thresholds |
+| `npm run benchmark:console` | Materialize a temporary 10k vault, run the Console benchmark, and clean it up |
+
+#### Dependency troubleshooting
+
+- `npm` or `node` is not found: install Node.js 20 LTS, reopen the terminal, and verify with `node --version` and `npm --version`.
+- PowerShell blocks `npm.ps1`: use `npm.cmd ci` and `npm.cmd run dev`, or use Command Prompt.
+- `Cannot find module`: make sure the current directory contains `package.json`, then run `npm ci` again.
+- pnpm asks for approval to run the `esbuild` install script: return to the npm workflow used by this repository and run `npm ci`.
+- Obsidian cannot find the plugin: verify that `.obsidian/plugins/web-novel-assistant/` directly contains `main.js`, `manifest.json`, and `styles.css`, then reload Obsidian.
 
 <details>
 <summary><kbd>🎯 Key Commands</kbd></summary>

@@ -1,0 +1,23 @@
+import { describe, expect, it } from 'vitest';
+import { createDefaultConsoleProject } from '../../src/console/config';
+import type { TaskActivation } from '../../src/console/domain';
+import { CreativeTaskRepository, MarkdownChangePlanner, creativeTaskDataFromRecord } from '../../src/console/persistence';
+import { memoryPlanningPort, record, snapshot } from './wave3-fixtures';
+import { taskData, taskRecord } from './wave5-fixtures';
+describe('CreativeTaskRepository', () => {
+	it('round-trips all activation shapes while keeping related objects separate', () => { const activations: TaskActivation[] = [{ relation: 'before', anchorType: 'event', anchorId: 'EVT-0001' }, { relation: 'approaching', anchorType: 'event', anchorId: 'EVT-0001' }, { relation: 'at', anchorType: 'milestone', anchorId: 'MLS-0001' }, { relation: 'after', anchorType: 'event', anchorId: 'EVT-0001' }, { relation: 'between', anchorType: 'event', startAnchorId: 'EVT-0001', endAnchorId: 'EVT-0002' }, { relation: 'blocked_by', anchorType: 'task', blockerIds: ['TSK-0002'] }]; for (const activation of activations) { const parsed = creativeTaskDataFromRecord(taskRecord('TSK-0001', { activation, relatedObjectIds: ['CHR-0001'] })); expect(parsed.activation).toEqual(activation); expect(parsed.relatedObjectIds).toEqual(['CHR-0001']); } });
+	it('plans create, update, delete, and validated status transitions', async () => { const task = taskRecord('TSK-0001'); const port = memoryPlanningPort({ [task.source.path]: '---\ntype: task\nid: TSK-0001\nstatus: active\n---\n正文' }); const repository = new CreativeTaskRepository(() => snapshot(task), createDefaultConsoleProject('作品'), port, new MarkdownChangePlanner(port)); expect((await repository.planCreate('TSK-0002', '补场景', taskData())).files[0]?.path).toContain('TSK-0002-补场景.md'); expect((await repository.planStatus('TSK-0001', 'completed')).fieldDiffs[0]?.field).toBe('status'); const deletion = await repository.planDelete('TSK-0001'); expect(deletion).toMatchObject({ risk: 'high', requiresConfirmation: true, files: [{ operation: 'delete' }] }); expect(deletion.warnings).toHaveLength(1); await expect(repository.planStatus('TSK-0001', 'planned')).rejects.toThrow('TASK_TRANSITION_NOT_ALLOWED'); });
+	it('fails closed for invalid ids, states, anchors, blockers, legacy records, and unavailable indexes', async () => { const project = createDefaultConsoleProject('作品'); const port = memoryPlanningPort(); const empty = new CreativeTaskRepository(() => snapshot(), project, port, new MarkdownChangePlanner(port)); await expect(empty.planCreate('bad', 'x', taskData())).rejects.toThrow('INVALID_TASK_ID'); await expect(empty.planCreate('TSK-0001', 'x', taskData({ activation: { relation: 'at', anchorType: 'event', anchorId: '' } }))).rejects.toThrow('INVALID_TASK_ANCHOR'); await expect(empty.planCreate('TSK-0001', 'x', taskData({ activation: { relation: 'blocked_by', anchorType: 'task', blockerIds: [] } }))).rejects.toThrow('INVALID_TASK_BLOCKERS'); const legacy = record('task', undefined, { legacyKind: 'timed-task' }); const legacyRepo = new CreativeTaskRepository(() => snapshot(legacy), project, port, new MarkdownChangePlanner(port)); await expect(legacyRepo.planUpdate(legacy.key, taskData())).rejects.toThrow('CREATIVE_TASK_NOT_FOUND'); const unavailable = new CreativeTaskRepository(() => undefined, project, port, new MarkdownChangePlanner(port)); await expect(unavailable.planCreate('TSK-0001', 'x', taskData())).rejects.toThrow('INDEX_UNAVAILABLE'); });
+	it('rejects duplicate ids, malformed data, incomplete ranges, and missing task sources', async () => {
+		const project = createDefaultConsoleProject('作品');
+		const existing = taskRecord('TSK-0001');
+		const port = memoryPlanningPort();
+		const repository = new CreativeTaskRepository(() => snapshot(existing), project, port, new MarkdownChangePlanner(port));
+		await expect(repository.planCreate('TSK-0001', '重复', taskData())).rejects.toThrow('TASK_ID_EXISTS');
+		await expect(repository.planCreate('TSK-0002', '坏状态', taskData({ status: 'unknown' }))).rejects.toThrow('INVALID_CREATIVE_TASK');
+		await expect(repository.planCreate('TSK-0002', '坏优先级', taskData({ priority: 'unknown' }))).rejects.toThrow('INVALID_CREATIVE_TASK');
+		await expect(repository.planCreate('TSK-0002', '坏区间', taskData({ activation: { relation: 'between', anchorType: 'event', startAnchorId: '', endAnchorId: 'EVT-0002' } }))).rejects.toThrow('INVALID_TASK_ANCHOR');
+		await expect(repository.planUpdate('TSK-0001', taskData())).rejects.toThrow('TASK_SOURCE_NOT_FOUND');
+		await expect(repository.planDelete('missing')).rejects.toThrow('CREATIVE_TASK_NOT_FOUND');
+	});
+});

@@ -16,7 +16,7 @@ import { FolderSuggestModal } from './FolderSuggestModal';
 import { FileSuggestModal } from './FileSuggestModal';
 import { Logger } from '../utils/Logger';
 import { formatIgnoredContextSnippet } from '../utils/proofreadingHelpers';
-import { normalizeConsoleProjects } from '../console/config';
+import { CONSOLE_DIRECTORY_KEYS, ConsoleProjectsSettingsModel, persistConsoleProjects, type ConsoleProjectFormField } from '../console/config';
 
 class HistoryRestoreConfirmModal extends Modal {
 	constructor(app: App, private onConfirm: () => Promise<void>) {
@@ -67,10 +67,10 @@ export class AccurateCountSettingTab extends PluginSettingTab {
 		this.plugin = plugin;
 	}
 
-	public getSettingDefinitions(): Record<string, unknown> {
-		// Provide a dummy record to satisfy obsidianmd/no-missing-setting-definitions 
+	public getSettingDefinitions(): never[] {
+		// Provide an empty declarative list to satisfy obsidianmd/no-missing-setting-definitions
 		// for Obsidian 1.13.0+ since we use the imperative display() API.
-		return {};
+		return [];
 	}
 
 	display(): void {
@@ -422,38 +422,71 @@ export class AccurateCountSettingTab extends PluginSettingTab {
 				text.inputEl.addClass('webnovel-settings-input-full');
 			});
 
-		let consoleProjectsTempValue = JSON.stringify(this.plugin.settings.consoleProjects || [], null, 2);
-		const saveConsoleProjectsAction = async () => {
-			let parsed: unknown;
-			try {
-				parsed = consoleProjectsTempValue.trim() ? JSON.parse(consoleProjectsTempValue) : [];
-			} catch {
-				new Notice(t('notice.console-projects-invalid-json'));
-				return;
-			}
-			const normalized = normalizeConsoleProjects(parsed);
-			if (normalized.diagnostics.length > 0) {
-				new Notice(`${t('notice.console-projects-invalid')}: ${normalized.diagnostics[0]?.message || ''}`);
-				return;
-			}
-			if (JSON.stringify(this.plugin.settings.consoleProjects) === JSON.stringify(normalized.projects)) return;
-			this.plugin.settings.consoleProjects = normalized.projects;
-			consoleProjectsTempValue = JSON.stringify(normalized.projects, null, 2);
-			await this.plugin.saveSettings();
-			new Notice(t('notice.console-projects-saved'));
-		};
+		const consoleProjectsSection = containerEl.createDiv({ cls: 'webnovel-console-project-settings' });
+		const consoleProjectsModel = new ConsoleProjectsSettingsModel(this.plugin.settings.consoleProjects || []);
+		const renderConsoleProjects = () => {
+			consoleProjectsSection.empty();
+			new Setting(consoleProjectsSection).setName(t('setting.console-projects')).setDesc(t('setting.console-projects-desc')).setHeading();
+			const validation = consoleProjectsModel.validate();
+			const addTextField = (parent: HTMLElement, name: string, value: string, onChange: (value: string) => void, error?: string) => {
+				new Setting(parent).setName(name).addText(text => text.setValue(value).onChange(onChange));
+				if (error) parent.createDiv({ cls: 'webnovel-console-project-settings__error', text: error });
+			};
+			consoleProjectsModel.drafts.forEach((draft, index) => {
+				const card = consoleProjectsSection.createDiv({ cls: 'webnovel-console-project-settings__card' });
+				const heading = new Setting(card).setName(`${t('setting.console-project')} ${index + 1}`).setHeading();
+				heading.addButton(button => button.setButtonText(t('setting.console-project-remove')).setWarning().onClick(() => { consoleProjectsModel.removeProject(index); renderConsoleProjects(); }));
+				const errors = validation.fieldErrors[index] || {};
+				addTextField(card, t('setting.console-project-id'), draft.projectId, value => { draft.projectId = value; }, errors.projectId);
+				addTextField(card, t('setting.console-project-code'), draft.projectCode, value => { draft.projectCode = value; }, errors.projectCode);
+				addTextField(card, t('setting.console-project-root'), draft.root, value => { draft.root = value; }, errors.root);
+				const directories = card.createEl('details');
+				directories.createEl('summary', { text: t('setting.console-project-directories') });
+				for (const key of CONSOLE_DIRECTORY_KEYS) {
+					const field: ConsoleProjectFormField = `directories.${key}`;
+					addTextField(directories, key, draft.directories[key], value => { draft.directories[key] = value; }, errors[field]);
+				}
+			});
+			for (const diagnostic of validation.diagnostics) consoleProjectsSection.createDiv({ cls: 'webnovel-console-project-settings__error', text: diagnostic.message });
 
-		new Setting(containerEl)
-			.setName(t('setting.console-projects'))
-			.setDesc(t('setting.console-projects-desc'))
-			.addTextArea(text => {
-				text.setPlaceholder(t('setting.console-projects-placeholder'))
-					.setValue(consoleProjectsTempValue)
-					.onChange(value => { consoleProjectsTempValue = value; });
+			const actions = new Setting(consoleProjectsSection);
+			actions.addButton(button => button.setButtonText(t('setting.console-project-add')).onClick(() => { consoleProjectsModel.addProject(); renderConsoleProjects(); }));
+			actions.addButton(button => button.setButtonText(t('setting.console-project-undo')).onClick(() => { consoleProjectsModel.undo(); renderConsoleProjects(); }));
+			actions.addButton(button => button.setButtonText(t('setting.console-project-save')).setCta().onClick(async () => {
+				try {
+					const result = await consoleProjectsModel.save(projects => persistConsoleProjects(
+						this.plugin.settings,
+						projects,
+						() => this.plugin.saveSettings(),
+						configured => this.plugin.services.getOptional('ConsoleApplication')?.reconfigureProjects(configured) ?? Promise.resolve(),
+					));
+					if (!result.projects) {
+						new Notice(`${t('notice.console-projects-invalid')}: ${result.diagnostics[0]?.message || t('notice.console-projects-check-fields')}`);
+						renderConsoleProjects();
+						return;
+					}
+					new Notice(t('notice.console-projects-saved'));
+					renderConsoleProjects();
+				} catch (error) {
+					new Notice(`${t('notice.console-projects-save-failed')}: ${error instanceof Error ? error.message : String(error)}`);
+				}
+			}));
+
+			const advanced = consoleProjectsSection.createEl('details', { cls: 'webnovel-console-project-settings__advanced' });
+			advanced.createEl('summary', { text: t('setting.console-project-advanced') });
+			let advancedValue = consoleProjectsModel.toAdvancedJson();
+			new Setting(advanced).setDesc(t('setting.console-project-advanced-desc')).addTextArea(text => {
+				text.setPlaceholder(t('setting.console-projects-placeholder')).setValue(advancedValue).onChange(value => { advancedValue = value; });
 				text.inputEl.rows = 8;
-				text.inputEl.addEventListener('change', () => { void saveConsoleProjectsAction(); });
 				text.inputEl.addClass('webnovel-settings-input-full');
 			});
+			new Setting(advanced).addButton(button => button.setButtonText(t('setting.console-project-apply-json')).onClick(() => {
+				const result = consoleProjectsModel.applyAdvancedJson(advancedValue);
+				if (!result.applied) { new Notice(`${t('notice.console-projects-invalid')}: ${result.message || ''}`); return; }
+				renderConsoleProjects();
+			}));
+		};
+		renderConsoleProjects();
 
 		new Setting(containerEl)
 			.setName(t('setting.strict-chapter-mode'))

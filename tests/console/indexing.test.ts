@@ -132,6 +132,24 @@ describe('Wave 1 indexing', () => {
 		expect(sourcePort.listMarkdownFiles).toHaveBeenCalledTimes(1);
 	});
 
+	it('disposes coordinator and index listeners idempotently so later events are ignored', async () => {
+		const service = new EntityIndexService({ listMarkdownFiles: vi.fn().mockResolvedValue([]) }, registry);
+		await service.build(project);
+		const states = vi.fn();
+		const snapshots = vi.fn();
+		service.onState(states);
+		service.onSnapshot(snapshots);
+		const coordinator = new IndexCoordinator(service);
+		coordinator.dispose();
+		coordinator.dispose();
+		expect(coordinator.apply(project, { type: 'create', source: adapterSource('作品/a.md', { type: 'character', id: 'CHR-0001' }) })).toBeUndefined();
+		service.restore(new IndexSnapshot('restored', project.projectId, []));
+		service.onState(states);
+		expect(states).not.toHaveBeenCalled();
+		expect(snapshots).not.toHaveBeenCalled();
+		expect(coordinator.getLastAffectedEntityKeys()).toEqual([]);
+	});
+
 	it('maintains isolated project snapshots and caches while file events stay incremental', async () => {
 		const first = new TFile('a.md', '作品一/a.md');
 		first.stat = { mtime: 1 };
@@ -165,6 +183,7 @@ describe('Wave 1 indexing', () => {
 			},
 		} as never;
 		const runtime = new ConsoleIndexRuntime(plugin);
+		expect(runtime.getConfigDiagnostics()).toEqual([]);
 		await runtime.initialize();
 		expect(runtime.getProjectIds()).toEqual(['project-1', 'project-2']);
 		expect(runtime.getIndex('project-1')?.getSnapshot()?.records[0]?.id).toBe('CHR-0001');
@@ -183,5 +202,66 @@ describe('Wave 1 indexing', () => {
 		await runtime.handleFileEvent({ type: 'modify', file: first });
 		expect(runtime.getCacheError('project-1')).toBe('disk full');
 		expect(runtime.getIndex('project-1')?.getSnapshot()?.records[0]?.title).toBe('A2');
+	});
+
+	it('destroys every runtime context without deleting cache or responding to later file events', async () => {
+		const file = new TFile('a.md', '作品/a.md');
+		file.stat = { mtime: 1 };
+		const remove = vi.fn().mockResolvedValue(undefined);
+		const cachedRead = vi.fn().mockResolvedValue('# A');
+		const plugin = {
+			manifest: { id: 'test-console', dir: 'plugins/test-console' },
+			settings: { consoleProjects: [createDefaultConsoleProject('作品')] },
+			app: {
+				vault: { getMarkdownFiles: () => [file], cachedRead, adapter: { exists: vi.fn().mockResolvedValue(false), read: vi.fn(), write: vi.fn(), remove } },
+				metadataCache: { getFileCache: () => ({ frontmatter: { type: 'character', id: 'CHR-0001', title: 'A' } }) },
+			},
+		} as never;
+		const runtime = new ConsoleIndexRuntime(plugin);
+		await runtime.initialize();
+		const oldIndex = runtime.getIndex('project-1');
+		const oldVersion = oldIndex?.getSnapshot()?.version;
+		runtime.destroy();
+		runtime.destroy();
+		await runtime.handleFileEvent({ type: 'modify', file });
+		expect(runtime.getProjectIds()).toEqual([]);
+		expect(runtime.getIndex('project-1')).toBeUndefined();
+		expect(oldIndex?.getSnapshot()?.version).toBe(oldVersion);
+		expect(remove).not.toHaveBeenCalled();
+		expect(cachedRead).toHaveBeenCalledTimes(1);
+	});
+
+	it('refreshes created and modified paths from current Markdown when metadata cache is stale', async () => {
+		const files: TFile[] = [];
+		const contents = new Map<string, string>();
+		const cacheFiles = new Map<string, string>();
+		const plugin = {
+			manifest: { id: 'test-console', dir: 'plugins/test-console' },
+			settings: { consoleProjects: [{ ...createDefaultConsoleProject('作品'), projectId: 'p1' }] },
+			app: {
+				vault: {
+					getMarkdownFiles: () => [...files],
+					getAbstractFileByPath: (path: string) => files.find(file => file.path === path) || null,
+					cachedRead: async (file: TFile) => contents.get(file.path) || '',
+					adapter: {
+						exists: async (path: string) => cacheFiles.has(path), read: async (path: string) => cacheFiles.get(path) || '',
+						write: async (path: string, value: string) => { cacheFiles.set(path, value); }, remove: async (path: string) => { cacheFiles.delete(path); },
+					},
+				},
+				metadataCache: { getFileCache: () => ({ frontmatter: { type: 'event', id: 'EVT-0002', title: 'stale', event_status: 'planned' } }) },
+			},
+		} as never;
+		const runtime = new ConsoleIndexRuntime(plugin);
+		await runtime.initialize();
+		const created = new TFile('EVT-0002.md', '作品/事件数据库/EVT-0002.md'); created.stat = { mtime: 2 }; files.push(created);
+		contents.set(created.path, '---\ntype: event\nid: EVT-0002\ntitle: "夜访钟楼"\nevent_status: planned\nstoryline: protagonist\n---\n');
+
+		await runtime.refreshPaths([created.path]);
+		expect(runtime.getIndex('p1')?.getSnapshot()?.idRegistry.resolve('EVT-0002')).toMatchObject({ title: '夜访钟楼', data: { event_status: 'planned' } });
+
+		created.stat = { mtime: 3 };
+		contents.set(created.path, contents.get(created.path)!.replace('event_status: planned', 'event_status: occurred'));
+		await runtime.refreshPaths([created.path]);
+		expect(runtime.getIndex('p1')?.getSnapshot()?.idRegistry.resolve('EVT-0002')?.data.event_status).toBe('occurred');
 	});
 });

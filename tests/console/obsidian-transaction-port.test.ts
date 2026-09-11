@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { TFile } from 'obsidian';
+import { TFile, TFolder } from 'obsidian';
 import { ObsidianIndexRefreshPort, ObsidianTransactionPort, createObsidianAuditStorage } from '../../src/console/persistence';
 import type { WebNovelAssistantPlugin } from '../../src/types/plugin';
 
@@ -33,15 +33,26 @@ describe('Obsidian transaction adapters', () => {
 		await expect(port.modify('missing.md', 'x')).rejects.toThrow('not found');
 	});
 
-	it('waits for a newer immutable snapshot, or returns one already published', async () => {
-		let listener!: (snapshot: { version: string }) => void;
-		const index = { getSnapshot: vi.fn().mockReturnValue({ version: 's2' }), onSnapshot: vi.fn((cb: typeof listener) => { listener = cb; return vi.fn(); }) };
-		const refresh = new ObsidianIndexRefreshPort({ getIndex: () => index } as never);
-		expect(await refresh.waitForRefresh([], 's1')).toBe('s2');
-		index.getSnapshot.mockReturnValue({ version: 's1' });
-		const waiting = refresh.waitForRefresh([], 's1');
-		listener({ version: 's2' });
-		expect(await waiting).toBe('s2');
+	it('creates missing parent folders before a nested file', async () => {
+		const entries = new Map<string, unknown>();
+		const vault = {
+			getAbstractFileByPath: vi.fn((path: string) => entries.get(path) || null),
+			createFolder: vi.fn(async (path: string) => { entries.set(path, Object.assign(new TFolder(), { path })); }),
+			create: vi.fn().mockResolvedValue(undefined), adapter: {},
+		};
+		const port = new ObsidianTransactionPort({ app: { vault, fileManager: {} } } as unknown as WebNovelAssistantPlugin);
+		await port.create('作品/Codex上下文/current-context.md', 'content');
+		expect(vault.createFolder.mock.calls.map(call => call[0])).toEqual(['作品', '作品/Codex上下文']);
+		expect(vault.create).toHaveBeenCalledWith('作品/Codex上下文/current-context.md', 'content');
+	});
+
+	it('forces an affected-path refresh instead of accepting an unrelated snapshot', async () => {
+		const refreshPaths = vi.fn().mockResolvedValue('s2');
+		const refresh = new ObsidianIndexRefreshPort({ refreshPaths } as never);
+		expect(await refresh.waitForRefresh(['作品/事件.md'], 's1')).toBe('s2');
+		expect(refreshPaths).toHaveBeenCalledWith(['作品/事件.md']);
+		refreshPaths.mockResolvedValueOnce('s1');
+		await expect(refresh.waitForRefresh(['作品/事件.md'], 's1')).rejects.toThrow('INDEX_REFRESH_STALE');
 	});
 
 	it('creates plugin-data audit storage without touching Markdown', async () => {

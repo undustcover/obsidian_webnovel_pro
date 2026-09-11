@@ -23,6 +23,12 @@ import { isSelectionEligibleForAnnotate } from '../utils/proofreadingHelpers';
 import { splitChapterAtCursor } from '../services/ChapterSplitter';
 import { ChapterSplitCollisionModal } from '../ui/ChapterSplitCollisionModal';
 
+function stringProperty(value: unknown, key: string): string | undefined {
+	if (!value || typeof value !== 'object') return undefined;
+	const candidate = (value as Record<string, unknown>)[key];
+	return typeof candidate === 'string' ? candidate : undefined;
+}
+
 function getSelectedOrCursorWord(editor: {
 	getSelection: () => string;
 	getCursor: () => { line: number; ch: number };
@@ -350,6 +356,7 @@ export class CommandManager {
 
 				void (async () => {
 					try {
+						const runtime = this.plugin.services?.getOptional('ConsoleIndexRuntime');
 						await splitChapterAtCursor({
 							app: this.plugin.app,
 							view,
@@ -362,7 +369,19 @@ export class CommandManager {
 								this.plugin.fileExplorerPatcher?.refreshManually();
 							},
 							writingJourneyService: this.plugin.writingJourneyService,
-							plugin: this.plugin
+							plugin: this.plugin,
+							allocateChapterId: () => {
+								const ids = new Set(runtime?.getIndex()?.getSnapshot()?.idRegistry.byId.keys() || []);
+								for (const file of this.plugin.app.vault.getMarkdownFiles()) {
+									const frontmatter = this.plugin.app.metadataCache.getFileCache(file)?.frontmatter;
+									for (const key of ['id', 'ID', '永久ID', '永久_id']) {
+										const rawId = stringProperty(frontmatter, key);
+										if (rawId) ids.add(rawId);
+									}
+								}
+								return ChapterSorter.reserveNextChapterId(ids);
+							},
+							onStableAnchorImpact: (impact) => Logger.info('[ChapterSplitter] Stable anchor impact:', impact)
 						});
 					} catch (err) {
 						Logger.error('[CommandManager] Unexpected error splitting chapter:', err);
