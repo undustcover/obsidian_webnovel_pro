@@ -21,10 +21,10 @@
 | P0-088 统一交互反馈 | action runner、写入口审计/UI 测试 | 12～16、18、22、23、31 | [ActionRunner](P0-088-action-runner.md)、[入口迁移](P0-088-action-migration.md) | [Wave 8 放行](wave-8-release.md) |
 | P0-089 首次使用与恢复测试 | fixture 自检、first-run 集成、时序/恢复 | 01、06、29、32 | [fixtures](P0-089-fixtures.md)、[first run](P0-089-first-run.md)、[recovery](P0-089-recovery-tests.md) | 自动恢复链路已完成；真实 Obsidian 恢复 smoke 待 P0-091 |
 | P0-090 路由与操作可达性测试 | 全路由矩阵、命令追踪、错误审计 | 04、06、08、12～16、18、22～25、28、31 | [routes](P0-090-routes.md)、[actions](P0-090-actions.md)、[error feedback](P0-090-error-feedback.md) | 自动操作矩阵已完成；真实交互待 P0-091 |
-| P0-091 真实 Obsidian smoke | fixture hash/数量清单 | 01～31 | [Vault setup](P0-091-vault-setup.md) | [first run（通过）](P0-091-first-run-smoke.md)、[write smoke（通过）](P0-091-write-smoke.md)、[recovery smoke（进行中）](P0-091-recovery-smoke.md) |
-| P0-092 视觉、缩放、键盘与无障碍 | CSS/stylelint/accessibility 测试 | 02、03、31 | [layout 自动证据](P0-092-layout.md)，CSS/a11y audit 待后续闭环 | `P0-092-layout.md`（进行中）、`P0-092-theme-scale.md`、`P0-092-accessibility.md` 以及 `../AC-02/`、`../AC-03/` |
-| P0-093 回归与候选包 | 完整测试、coverage、审计、10k benchmark、artifact verifier | 01～32 | [旧能力回归](P0-093-legacy-regression.md)；[完整工程验证](P0-093-engineering-validation.md) | [旧能力真实回归（通过）](P0-093-legacy-regression.md)；`P0-093-release-candidate.md`、`P0-093-rc-smoke.md`（待生成） |
-| P0-094 最终验收与签字 | 任务解析、32 行 AC 审计、报告必填项 | 01～32 | `P0-094-task-audit.md`、`P0-094-ac-audit.md`（待生成） | `V0.21-final-acceptance.md`（待生成） |
+| P0-091 真实 Obsidian smoke | fixture hash/数量清单 | 01～31 | [Vault setup](P0-091-vault-setup.md) | [first run（通过）](P0-091-first-run-smoke.md)、[write smoke（通过）](P0-091-write-smoke.md)、[recovery smoke（通过）](P0-091-recovery-smoke.md) |
+| P0-092 视觉、缩放、键盘与无障碍 | CSS/stylelint/accessibility 测试 | 02、03、31 | [layout](P0-092-layout.md)、[theme/scale](P0-092-theme-scale.md)、[accessibility](P0-092-accessibility.md) | AC-02、AC-03 的未执行实机证据按用户批准范围豁免关闭 |
+| P0-093 回归与候选包 | 完整测试、coverage、审计、10k benchmark、artifact verifier | 01～32 | [旧能力回归](P0-093-legacy-regression.md)；[完整工程验证](P0-093-engineering-validation.md) | [旧能力真实回归](P0-093-legacy-regression.md)；[候选固化](P0-093-release-candidate.md)；[候选复验](P0-093-rc-smoke.md) |
+| P0-094 最终验收与签字 | 任务解析、32 行 AC 审计、报告必填项 | 01～32 | [任务审计](P0-094-task-audit.md)、[AC 审计](P0-094-ac-audit.md) | [签字版发布报告](V0.21-final-acceptance.md) |
 
 ## 受影响 AC 反向索引
 
@@ -59,6 +59,7 @@
 
 - [任务与证据对账](P0-094-task-audit.md)
 - [AC-01～32 最终验收](P0-094-ac-audit.md)
+- [签字版发布报告](V0.21-final-acceptance.md)
 
 ## 索引维护规则
 
