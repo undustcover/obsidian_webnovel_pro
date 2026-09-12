@@ -1,3 +1,59 @@
+## 🚀 v0.3.0
+
+发布日期：2026-09-12
+
+### 小说控制台
+
+- **统一项目入口**：新增桌面端小说控制台，提供首次配置向导、项目切换、构建诊断、索引状态以及重试/重建入口；空配置不再显示技术性错误。
+- **完整叙事导航**：新增小说总览、重要变更、ID 注册表、模板，以及全书、卷、阶段、章节策划和章节的五级叙事页面。
+- **实体中心**：正文、人物、组织、地点、道具和创作素材使用独立页面与详情，可从控制台打开相邻 Markdown。
+- **事件与故事推进**：接通事件创建和允许字段编辑、事实/叙事/信息状态、时间轴投影、唯一焦点、多故事线游标与里程碑推进。
+- **任务、建议与伏笔**：新增当前任务及行动分组、建议确认转任务、伏笔埋设/推进/揭示锚点与错过提示。
+- **上下文与资料健康**：支持预览并发布 Markdown + JSON 上下文；健康页可定位重复 ID、坏锚点、结构、连续性与推进问题。
+
+### 安全、兼容与性能
+
+- **统一安全写入**：高风险操作先展示文件变化、字段差异、风险和影响；取消时零写入，确认后执行，并保留并发校验、审计和失败补偿。
+- **旧格式兼容**：既有章节、时间线、伏笔、限时任务和旧设定合集保持可读，首次索引不会批量改写用户 Markdown。
+- **正式设定架构**：设定按分类目录组织，每个设定使用独立 Markdown 文件；文件内各级标题只组织单个设定内容。旧版二级标题合集继续只读兼容。
+- **大型 Vault**：增量索引支持 10k Markdown 测试规模，普通编辑不触发全库重扫，并提供明确的降级与恢复状态。
+- **旧能力回归**：创作主页、写作工作台、章节、时间线、伏笔、设定、任务、沉浸写作、统计、校对、合并和创建流程完成回归。
+
+### 界面与命令
+
+- 补齐创作主页、写作工作台、小说控制台、章节一览、设定一览、伏笔看板、时间线和写作状态入口。
+- “自动创建下一章”和“在光标处拆分章节”可直接从命令面板访问；没有活动 Markdown 编辑器时显示明确提示。
+- 控制台支持宽、中、窄桌面 Leaf，自适应列表、详情、表单和变更预览 Modal，并提供键盘焦点与减少动画样式。
+
+### 发布信息
+
+- 对外版本：`v0.3`；插件清单版本：`0.3.0`；最低 Obsidian：`1.8.7`。
+- 作者更新为 **undustcover**。
+- 继续使用 MIT License，版权声明更新为 `Copyright (c) 2026 undustcover`。
+
+### English Changelog
+
+#### Novel Console
+
+- Added a desktop Novel Console with first-run setup, project switching, build diagnostics, index health, retry, and rebuild actions.
+- Added dedicated overview, changes, ID registry, templates, five-level narrative navigation, entity centers, events, timeline projections, focus, storyline cursors, milestones, tasks, suggestions, foreshadowing, context publishing, and data-health pages.
+- Important writes now preview files, field diffs, risks, and impact before confirmation, with zero-write cancellation, concurrency checks, audits, and compensation on failure.
+
+#### Compatibility and scale
+
+- Legacy chapters, timelines, foreshadowing, timed tasks, and lore collections remain readable without bulk Markdown migration.
+- Canonical lore now uses category folders and one Markdown file per entity; headings inside a file only structure that entity.
+- Incremental indexing is validated against a 10k-note fixture, and ordinary edits do not trigger full-vault rescans.
+- Existing homepage, workbench, chapter, timeline, foreshadowing, lore, task, immersive writing, statistics, proofreading, merge, and creation workflows were regression-tested.
+
+#### Release metadata
+
+- Public release `v0.3`; plugin manifest version `0.3.0`; minimum Obsidian `1.8.7`.
+- Author changed to **undustcover**.
+- MIT License retained with copyright updated to `Copyright (c) 2026 undustcover`.
+
+---
+
 ## 🔧 v3.9.5
 
 ### 新增功能

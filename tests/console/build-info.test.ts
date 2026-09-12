@@ -4,7 +4,7 @@ import { CONSOLE_BUILD_INFO, formatBuildInfo, normalizeBuildInfo } from '../../s
 describe('Console build identity', () => {
 	it('provides stable development fallbacks when build injection is unavailable', () => {
 		expect(CONSOLE_BUILD_INFO).toEqual({
-			version: '0.21.9',
+			version: '0.3.0',
 			commit: 'development',
 			builtAt: 'development',
 		});
@@ -12,7 +12,7 @@ describe('Console build identity', () => {
 
 	it('normalizes missing or blank fields without exposing machine details', () => {
 		expect(normalizeBuildInfo({ version: ' ', commit: '', builtAt: '\t' })).toEqual({
-			version: '0.21.9',
+			version: '0.3.0',
 			commit: 'development',
 			builtAt: 'development',
 		});

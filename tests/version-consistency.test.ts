@@ -4,12 +4,15 @@ import { describe, expect, it } from 'vitest';
 
 interface PackageMetadata {
 	version: string;
+	author: string;
+	license: string;
 }
 
 interface ManifestMetadata {
 	id: string;
 	version: string;
 	minAppVersion: string;
+	author: string;
 }
 
 const readJson = <T>(path: string): T => JSON.parse(readFileSync(resolve(process.cwd(), path), 'utf8')) as T;
@@ -24,7 +27,11 @@ describe('release version consistency', () => {
 		expect(manifest.id).toBe('web-novel-assistant');
 		expect(packageMetadata.version).toBe(manifest.version);
 		expect(versions[manifest.version]).toBe(manifest.minAppVersion);
-		expect(readme).toContain('V0.21 是小说控制台功能规格版本，对应插件发布版本 0.21.9（Git 标签 V0.219）');
-		expect(readme).toContain('V0.21 is the Novel Console feature-spec version and maps to plugin release 0.21.9 (Git tag V0.219)');
+		expect(manifest.version).toBe('0.3.0');
+		expect(packageMetadata.author).toBe('undustcover');
+		expect(manifest.author).toBe('undustcover');
+		expect(packageMetadata.license).toBe('MIT');
+		expect(readme).toContain('v0.3 是当前公开版本，插件清单版本为 0.3.0（Git 标签 v0.3）');
+		expect(readme).toContain('v0.3 is the current public release; its plugin manifest version is 0.3.0 (Git tag v0.3)');
 	});
 });

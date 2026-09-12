@@ -6,31 +6,19 @@
 
 **[English](#english)** | **中文**
 
-[![GitHub release](https://img.shields.io/github/v/release/HatanoChihiro/obsidian-webnovel-assistant?label=release&color=brightgreen)](https://github.com/HatanoChihiro/obsidian-webnovel-assistant/releases)
-[![License](https://img.shields.io/github/license/HatanoChihiro/obsidian-webnovel-assistant?color=blue)](LICENSE)
-[![Obsidian Downloads](https://img.shields.io/badge/dynamic/json?logo=obsidian&color=8b5cf6&label=downloads&query=%24%5B%223.2.0%22%5D&url=https%3A%2F%2Fraw.githubusercontent.com%2FHatanoChihiro%2Fobsidian-webnovel-assistant%2Fmain%2Fversions.json)](https://obsidian.md/plugins?id=web-novel-assistant)
+[![GitHub release](https://img.shields.io/github/v/release/undustcover/obsidian_webnovel_pro?label=release&color=brightgreen)](https://github.com/undustcover/obsidian_webnovel_pro/releases)
+[![License](https://img.shields.io/github/license/undustcover/obsidian_webnovel_pro?color=blue)](LICENSE)
+[![Obsidian Downloads](https://img.shields.io/badge/dynamic/json?logo=obsidian&color=8b5cf6&label=downloads&query=%24%5B%220.3.0%22%5D&url=https%3A%2F%2Fraw.githubusercontent.com%2Fundustcover%2Fobsidian_webnovel_pro%2Fmain%2Fversions.json)](https://obsidian.md/plugins?id=web-novel-assistant)
 
 为网络小说与故事创作者打造的 Obsidian 一站式写作套件。<br />
-精准字数统计与目标追踪 · 故事时间线看板 · 伏笔回收管理 · 章节概览看板 · 设定图谱与专注打字模式。
+小说控制台与安全剧情规划 · 精准字数统计与目标追踪 · 故事时间线 · 伏笔管理 · 章节看板 · 设定图谱与专注写作。
 
 <br />
 
-<a href="doc/USER_GUIDE.md"><kbd>📖 使用指南</kbd></a>
+<a href="doc/USER_GUIDE.md"><kbd>📖 v0.3 操作手册 / 使用指南</kbd></a>
+<a href="doc/RELEASE_NOTES_v0.3.md"><kbd>🚀 v0.3 发布说明</kbd></a>
 <a href="doc/OBS_OVERLAY_CSS_GUIDE.md"><kbd>🎥 OBS CSS 指南</kbd></a>
 <a href="doc/CHANGELOG.md"><kbd>📋 更新日志</kbd></a>
-
-<br />
-
-<details>
-<summary><kbd>💖 支持项目 · 请作者喝杯咖啡</kbd></summary>
-
-<br />
-
-如果这个插件对你的码字事业有所帮助，欢迎支持作者，你的支持是我持续更新的最大动力！
-
-<img width="500" alt="赞赏码" src="assets/donate.png" />
-
-</details>
 
 <br />
 
@@ -42,12 +30,22 @@
 
 ## ✨ 功能一览
 
-### 🧭 小说控制台 V0.21（桌面端）
+### 🧭 小说控制台 v0.3（桌面端）
 <sub>统一总览 · 五级叙事导航 · 正文/事件/里程碑/任务管理 · 多时间轴 · 上下文生成 · 资料健康检查</sub>
 
 小说控制台以 Markdown 为唯一事实源，可从新格式与既有章节、时间线、伏笔、设定和限时任务中建立只读索引。高风险修改会先展示变更计划和影响范围，确认后才写入；首次索引不会批量改写笔记。控制台入口仅在桌面端显示，原有移动端能力不受影响。
 
-版本口径：**V0.21 是小说控制台功能规格版本，对应插件发布版本 0.21.9（Git 标签 V0.219）**；插件运行版本始终以 `manifest.json` 为准，`package.json` 必须与其一致，`versions.json` 记录该插件版本所需的最低 Obsidian 版本（当前为 1.8.7）。
+版本口径：**v0.3 是当前公开版本，插件清单版本为 0.3.0（Git 标签 v0.3）**。该版本完整交付小说控制台 V0.21 功能规格；运行版本始终以 `manifest.json` 为准，最低支持 Obsidian 1.8.7。
+
+#### v0.3 新增界面与能力
+
+- **项目与索引状态区**：首次配置向导、项目切换、索引状态、错误原因、重试与重建入口集中在控制台顶部。
+- **总览与导航**：小说总览、重要变更、ID 注册表、模板，以及全书/卷/阶段/章节策划的五级叙事页面各自展示职责内数据。
+- **实体中心**：正文、人物、组织、地点、道具分别浏览；详情可打开相邻 Markdown。设定正式采用“分类目录 + 每个设定独立 Markdown 文件”。
+- **创作控制**：事件创建与状态、时间轴投影、唯一焦点、多故事线游标、里程碑、当前任务、建议决策和伏笔锚点均有可达入口。
+- **安全写入**：重要写操作先显示文件变化、字段差异、风险和影响；取消时零写入，确认后才执行，并在失败时补偿或给出恢复步骤。
+- **上下文与健康检查**：可预览并发布 Markdown/JSON 上下文；健康页定位重复 ID、坏锚点、结构和连续性问题。
+- **兼容与性能**：旧章节、时间线、伏笔、设定合集和限时任务保持可读；10k Markdown Vault 使用增量索引，普通编辑不触发全库扫描。
 
 ### 🏠 创作主页
 <sub>全宽仪表盘 · 动态欢迎语 · 作品总览 · 数据面板 · 一键新建与导入作品</sub>
@@ -55,7 +53,7 @@
 <img width="100%" alt="homepage" src="assets/homepage.gif" />
 
 ### 🗂️ 写作工作台
-<sub>全章节面板 · 时间轴看板 · 伏笔看板 · 设定看板 · 任务看板 · 便签管理</sub>
+<sub>全章节面板 · 时间轴看板 · 伏笔看板 · 设定看板 · 任务看板 · 写作历程</sub>
 
 <img width="100%" alt="workbench" src="assets/workbench.gif" />
 
@@ -114,8 +112,8 @@
 | 方式 | 步骤 |
 |:-----|:-----|
 | **社区插件市场** *(推荐)* | 设置 → 第三方插件 → 浏览 → 搜索 **"WebNovel Assistant"** → 安装 → 启用 |
-| **BRAT** | 安装 [BRAT](https://github.com/TfTHacker/obsidian42-brat) → 添加仓库 `HatanoChihiro/obsidian-webnovel-assistant` → 启用 |
-| **手动安装** | [下载](https://github.com/HatanoChihiro/obsidian-webnovel-assistant/releases) → 解压到 `.obsidian/plugins/web-novel-assistant/` → 重启启用 |
+| **BRAT** | 安装 [BRAT](https://github.com/TfTHacker/obsidian42-brat) → 添加仓库 `undustcover/obsidian_webnovel_pro` → 启用 |
+| **手动安装** | [下载](https://github.com/undustcover/obsidian_webnovel_pro/releases) → 解压到 `.obsidian/plugins/web-novel-assistant/` → 重启启用 |
 
 ## 🚀 快速开始
 
@@ -144,7 +142,7 @@
 
 ```bash
 cd <你的-Vault>/.obsidian/plugins
-git clone https://github.com/HatanoChihiro/obsidian-webnovel-assistant.git web-novel-assistant
+git clone https://github.com/undustcover/obsidian_webnovel_pro.git web-novel-assistant
 cd web-novel-assistant
 npm ci
 npm run dev
@@ -265,11 +263,7 @@ npm run verify:artifact -- --build . --installed "<你的-Vault>/.obsidian/plugi
 
 [MIT License](LICENSE)
 
-⭐ Star · 🐛 [提交问题](https://github.com/HatanoChihiro/obsidian-webnovel-assistant/issues) · 💡 [功能建议与讨论](https://github.com/HatanoChihiro/obsidian-webnovel-assistant/discussions)
-
-<br />
-
-**反馈和交流群：964265407**
+作者：**undustcover** · ⭐ Star · 🐛 [提交问题](https://github.com/undustcover/obsidian_webnovel_pro/issues) · 💡 [功能建议与讨论](https://github.com/undustcover/obsidian_webnovel_pro/discussions)
 
 <br />
 
@@ -287,31 +281,19 @@ npm run verify:artifact -- --build . --installed "<你的-Vault>/.obsidian/plugi
 
 **English** | **[中文](#中文)**
 
-[![GitHub release](https://img.shields.io/github/v/release/HatanoChihiro/obsidian-webnovel-assistant?label=release&color=brightgreen)](https://github.com/HatanoChihiro/obsidian-webnovel-assistant/releases)
-[![License](https://img.shields.io/github/license/HatanoChihiro/obsidian-webnovel-assistant?color=blue)](LICENSE)
-[![Obsidian Downloads](https://img.shields.io/badge/dynamic/json?logo=obsidian&color=8b5cf6&label=downloads&query=%24%5B%223.2.0%22%5D&url=https%3A%2F%2Fraw.githubusercontent.com%2FHatanoChihiro%2Fobsidian-webnovel-assistant%2Fmain%2Fversions.json)](https://obsidian.md/plugins?id=web-novel-assistant)
+[![GitHub release](https://img.shields.io/github/v/release/undustcover/obsidian_webnovel_pro?label=release&color=brightgreen)](https://github.com/undustcover/obsidian_webnovel_pro/releases)
+[![License](https://img.shields.io/github/license/undustcover/obsidian_webnovel_pro?color=blue)](LICENSE)
+[![Obsidian Downloads](https://img.shields.io/badge/dynamic/json?logo=obsidian&color=8b5cf6&label=downloads&query=%24%5B%220.3.0%22%5D&url=https%3A%2F%2Fraw.githubusercontent.com%2Fundustcover%2Fobsidian_webnovel_pro%2Fmain%2Fversions.json)](https://obsidian.md/plugins?id=web-novel-assistant)
 
 An all-in-one writing studio for novel and story writers in Obsidian.<br />
-Accurate word count & goal tracking · Story timeline · Foreshadowing manager · Chapter corkboard · Lore graphs & focus timers.
+Novel Console & safe story planning · Accurate word counts and goals · Timelines · Foreshadowing · Chapter boards · Lore graphs · Focused writing.
 
 <br />
 
-<a href="doc/USER_GUIDE_EN.md"><kbd>📖 User Guide</kbd></a>
+<a href="doc/USER_GUIDE_EN.md"><kbd>📖 v0.3 Manual / User Guide</kbd></a>
+<a href="doc/RELEASE_NOTES_v0.3.md"><kbd>🚀 v0.3 Release Notes</kbd></a>
 <a href="doc/OBS_OVERLAY_CSS_GUIDE_EN.md"><kbd>🎥 OBS CSS Guide</kbd></a>
 <a href="doc/CHANGELOG.md"><kbd>📋 Changelog</kbd></a>
-
-<br />
-
-<details>
-<summary><kbd>💖 Support the Project · Buy the Author a Coffee</kbd></summary>
-
-<br />
-
-If this plugin helps with your writing, consider supporting the author. Your support is the greatest motivation for continuous updates!
-
-[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/hatanochihiro)
-
-</details>
 
 <br />
 
@@ -323,12 +305,22 @@ If this plugin helps with your writing, consider supporting the author. Your sup
 
 ## ✨ Feature Highlights
 
-### 🧭 Novel Console V0.21 (Desktop)
+### 🧭 Novel Console v0.3 (Desktop)
 <sub>Unified overview · Five-level narrative navigation · Manuscript/event/milestone/task management · Multiple timelines · Context generation · Data health checks</sub>
 
 The Novel Console treats Markdown as the sole source of truth and builds a read-only index from both the new schema and existing chapters, timelines, foreshadowing notes, lore, and timed tasks. High-risk changes show a change plan and impact report before confirmation, and initial indexing never bulk-rewrites notes. The Console entry is desktop-only; existing mobile features remain available.
 
-Version policy: **V0.21 is the Novel Console feature-spec version and maps to plugin release 0.21.9 (Git tag V0.219)**. The runtime plugin version is authoritative in `manifest.json`, `package.json` must match it, and `versions.json` maps that release to its minimum supported Obsidian version (currently 1.8.7).
+Version policy: **v0.3 is the current public release; its plugin manifest version is 0.3.0 (Git tag v0.3)**. It delivers the Novel Console V0.21 feature specification in full. Runtime versioning remains authoritative in `manifest.json`, with Obsidian 1.8.7 as the minimum supported version.
+
+#### New interfaces and capabilities in v0.3
+
+- **Project and index status**: first-run setup, project switching, index health, error causes, retry, and rebuild actions live together in the Console header.
+- **Overview and navigation**: dedicated Novel Overview, Changes, ID Registry, Templates, and five-level narrative pages for book, volume, stage, chapter plan, and chapter.
+- **Entity centers**: separate manuscript, character, organization, location, and item views with adjacent Markdown navigation. Canonical lore uses category folders and one Markdown file per entity.
+- **Creative control**: reachable workflows for event creation/state, timeline projections, unique focus, multi-storyline cursors, milestones, current tasks, suggestions, and foreshadowing anchors.
+- **Safe writes**: important operations preview file changes, field diffs, risks, and impact before confirmation; cancel performs zero writes, while failures compensate or provide recovery steps.
+- **Context and health**: preview and publish Markdown/JSON context, and diagnose duplicate IDs, invalid anchors, structure, continuity, and progression issues.
+- **Compatibility and scale**: legacy chapters, timelines, foreshadowing, lore collections, and timed tasks remain readable; incremental indexing supports 10k-note vaults without full rescans on normal edits.
 
 ### 🏠 Creative Homepage
 <sub>Full-width Dashboard · Dynamic Welcome · Novel Overview · Stats Panel · One-Click New Novel & Import Novel</sub>
@@ -336,7 +328,7 @@ Version policy: **V0.21 is the Novel Console feature-spec version and maps to pl
 <img width="100%" alt="homepage" src="assets/homepage_en.gif" />
 
 ### 🗂️ Writing Workbench
-<sub>All Chapters Panel · Timeline Board · Foreshadowing Board · Lore Board · Task Board · Notes Management</sub>
+<sub>All Chapters Panel · Timeline Board · Foreshadowing Board · Lore Board · Task Board · Writing Journey</sub>
 
 <img width="100%" alt="workbench" src="assets/workbench_en.gif" />
 
@@ -395,8 +387,8 @@ Version policy: **V0.21 is the Novel Console feature-spec version and maps to pl
 | Method | Steps |
 |:-------|:------|
 | **Community Plugins** *(Recommended)* | Settings → Community Plugins → Browse → Search **"WebNovel Assistant"** → Install → Enable |
-| **BRAT** | Install [BRAT](https://github.com/TfTHacker/obsidian42-brat) → Add repo `HatanoChihiro/obsidian-webnovel-assistant` → Enable |
-| **Manual** | [Download](https://github.com/HatanoChihiro/obsidian-webnovel-assistant/releases) → Extract to `.obsidian/plugins/web-novel-assistant/` → Restart & Enable |
+| **BRAT** | Install [BRAT](https://github.com/TfTHacker/obsidian42-brat) → Add repo `undustcover/obsidian_webnovel_pro` → Enable |
+| **Manual** | [Download](https://github.com/undustcover/obsidian_webnovel_pro/releases) → Extract to `.obsidian/plugins/web-novel-assistant/` → Restart & Enable |
 
 ## 🚀 Quick Start
 
@@ -425,7 +417,7 @@ The shortest local setup is to clone the repository directly into a test vault's
 
 ```bash
 cd <your-vault>/.obsidian/plugins
-git clone https://github.com/HatanoChihiro/obsidian-webnovel-assistant.git web-novel-assistant
+git clone https://github.com/undustcover/obsidian_webnovel_pro.git web-novel-assistant
 cd web-novel-assistant
 npm ci
 npm run dev
@@ -546,7 +538,7 @@ Proofreading and all note analysis run entirely locally. The plugin makes no aut
 
 [MIT License](LICENSE)
 
-⭐ Star · 🐛 [Issues](https://github.com/HatanoChihiro/obsidian-webnovel-assistant/issues) · 💡 [Discussions & Feature Requests](https://github.com/HatanoChihiro/obsidian-webnovel-assistant/discussions)
+Author: **undustcover** · ⭐ Star · 🐛 [Issues](https://github.com/undustcover/obsidian_webnovel_pro/issues) · 💡 [Discussions & Feature Requests](https://github.com/undustcover/obsidian_webnovel_pro/discussions)
 
 <br />
 

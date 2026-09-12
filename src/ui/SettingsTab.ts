@@ -85,8 +85,8 @@ export class AccurateCountSettingTab extends PluginSettingTab {
 		});
 		githubBox.createSpan({ text: t('setting.github-guide-prefix'), cls: 'text-muted' });
 		githubBox.createEl('a', {
-			text: 'HatanoChihiro/obsidian-webnovel-assistant',
-			href: 'https://github.com/HatanoChihiro/obsidian-webnovel-assistant/releases',
+			text: 'undustcover/obsidian_webnovel_pro',
+			href: 'https://github.com/undustcover/obsidian_webnovel_pro/releases',
 			cls: 'wn-github-link'
 		});
 

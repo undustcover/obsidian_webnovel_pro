@@ -1,7 +1,7 @@
 {
 	"name": "web-novel-assistant",
-	"version": "0.21.9",
-	"description": "An all-in-one writing studio for novel and story writers — accurate word count, goal tracking, story timeline, foreshadowing manager, chapter corkboard, and lore graphs",
+	"version": "0.3.0",
+	"description": "An all-in-one writing studio with a Novel Console, safe story planning, word goals, timelines, foreshadowing, lore, tasks, and local proofreading",
 	"main": "main.js",
 	"scripts": {
 		"build:css": "esbuild src/styles/index.css --bundle --outfile=styles.css",
@@ -33,12 +33,12 @@
 		"obs",
 		"streaming"
 	],
-	"author": "HatanoChihiro",
+	"author": "undustcover",
 	"license": "MIT",
 	"type": "commonjs",
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/HatanoChihiro/obsidian-webnovel-assistant.git"
+		"url": "https://github.com/undustcover/obsidian_webnovel_pro.git"
 	},
 	"devDependencies": {
 		"@codemirror/state": "^6.5.0",

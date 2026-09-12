@@ -8,6 +8,7 @@ Welcome to WebNovel Assistant! An Obsidian plugin designed specifically for web 
   - [Installation](#installation)
   - [First Use](#first-use)
 - [Core Features](#core-features)
+  - [Novel Console v0.3](#novel-console-v03)
   - [Workspace Settings](#workspace-settings)
   - [Create and Import Works](#create-and-import-works)
   - [Smart Chapter Sorting](#smart-chapter-sorting)
@@ -65,11 +66,11 @@ Welcome to WebNovel Assistant! An Obsidian plugin designed specifically for web 
 
 #### Using BRAT
 1. Install the [BRAT](https://github.com/TfTHacker/obsidian42-brat) plugin
-2. Add this repository in BRAT settings: `HatanoChihiro/obsidian-webnovel-assistant`
+2. Add this repository in BRAT settings: `undustcover/obsidian_webnovel_pro`
 3. Enable the plugin
 
 #### Manual Installation
-1. Download the latest `main.js`, `manifest.json`, and `styles.css` from [Releases](https://github.com/HatanoChihiro/obsidian-webnovel-assistant/releases)
+1. Download the latest `main.js`, `manifest.json`, and `styles.css` from [Releases](https://github.com/undustcover/obsidian_webnovel_pro/releases)
 2. Create a folder in your Obsidian vault: `.obsidian/plugins/web-novel-assistant/`
 3. Place the downloaded files in that folder
 4. Restart Obsidian and enable the plugin in Settings → Community plugins
@@ -85,6 +86,82 @@ Welcome to WebNovel Assistant! An Obsidian plugin designed specifically for web 
 ---
 
 ## Core Features
+
+### Novel Console v0.3
+
+Novel Console is the desktop project hub introduced in v0.3. It brings structured chapter, lore, event, task, and context information into one Obsidian tab while keeping Markdown as the sole source of truth. Indexes and caches can be rebuilt and never replace manuscript content.
+
+#### Open and configure it
+
+1. Under **Settings → WebNovel Assistant**, confirm your workspace folders. To use Creative Homepage, enable and open it from Settings first.
+2. Enter Writing Workbench from Creative Homepage, or search for **Novel Console** in the Command Palette.
+3. If no project mapping exists, use the first-run form to select the work root. Existing workspace settings are offered as compatible project candidates; editing `data.json` is unnecessary.
+4. Save and wait for the index status in the header to become **Ready**. For unconfigured or error states, use the visible configure, retry, or rebuild action.
+
+> [!important] Data safety
+> Initial indexing reads Markdown without bulk-migrating or rewriting legacy notes. Important event, focus, cursor, milestone, task, suggestion, foreshadowing, and context operations always show a preview first. Canceling the preview performs zero writes.
+
+#### Interface map
+
+| Area | Purpose |
+|---|---|
+| Header | Switch projects; inspect version, build identity, index state, and recovery actions |
+| Control overview | Novel overview, important changes, ID registry, templates, and health summary |
+| Narrative navigation | Book, volume, stage, chapter-plan, and chapter levels; current stage, unique focus, and storyline cursors |
+| Entity centers | Separate manuscript, character, organization, location, and item lists/details with adjacent Markdown navigation |
+| Events and progression | Create/edit events, inspect timeline projections, and progress events, cursors, or milestones |
+| Creative actions | Current tasks, action groups, suggestion decisions, and foreshadowing anchors |
+| Context and health | Preview/publish Markdown and JSON context; diagnose duplicate IDs, invalid anchors, structure, and continuity |
+
+#### Recommended directories and lore structure
+
+The default explicit project mapping uses `Control`, `Narrative`, `Manuscript`, `Lore`, `Events`, `Materials`, and `Codex Context` roles. Adjust their actual folder names to match an existing work.
+
+Canonical v0.3 lore uses category folders and one Markdown file per entity:
+
+```text
+Lore/
+├─ Characters/
+│  ├─ Lin Che.md
+│  └─ Su Mi.md
+├─ Organizations/
+│  └─ Old Harbor Bureau.md
+└─ Locations/
+   └─ Harbor Clocktower.md
+```
+
+Headings inside a file organize that one entity and do not create extra people or cards. Legacy collection files that store multiple entries under level-two headings remain readable, but newly created lore is written as independent files.
+
+#### Safe write workflow
+
+1. Choose a create, edit, or progress action on the relevant page.
+2. Review the target files, field diff, risks, and impact in the preview.
+3. Cancel when uncertain; the Console reports that no file was written.
+4. Confirm and wait for success plus index refresh. New entities should appear without reloading Obsidian.
+5. On a concurrent edit or write failure, avoid repeated clicks. Follow the error card to retry, rebuild the index, or open the target Markdown for manual review.
+
+#### Common workflows
+
+- **Plan an event**: Event Control → Create Event → Preview → Confirm; then manage factual, narrative, and information states or per-timeline importance.
+- **Progress the story**: Current Stage or Event Details → choose focus/storyline target → review impact → confirm. Suggestions never move cursors automatically.
+- **Create a task**: Current Tasks → Create Task → link an event or milestone → preview and confirm; tasks appear in approaching/current/missed action groups.
+- **Publish context**: select a chapter, event, task, or character → Context Preview → verify reason, authority, and knowledge boundary → publish Markdown + JSON.
+- **Check data health**: filter by severity or Rule ID, then open evidence files. Automatic fixes are offered only for explicitly allow-listed safe cases.
+
+#### Recovery
+
+- **Unconfigured**: open project setup and select the work root.
+- **Degraded/error index**: retry first, then rebuild. The index is derived data; rebuilding does not delete Markdown.
+- **Single-file parse failure**: open the file named by the error card, correct its frontmatter or invalid ID, and retry.
+- **Duplicate ID/invalid anchor**: locate conflicts in ID Registry or Data Health, decide which file is authoritative, then edit manually.
+- **Write failure**: inspect audit and compensation results. If manual recovery is requested, back up affected files before applying the shown diff.
+
+#### Relationship to existing interfaces
+
+- **Creative Homepage** is enabled and opened from plugin Settings, and handles work entry, creation, import, and summary data.
+- **Writing Workbench** is entered from Creative Homepage and focuses on chapters, timelines, foreshadowing, lore, tasks, and writing journey for one work.
+- **Novel Console** handles structured planning, cross-entity search, safe progression, context generation, and health checks.
+- **Classic panels** for timeline, foreshadowing, writing status, and chapter overview remain available. Existing mobile writing features remain supported; Novel Console itself is desktop-only.
 
 ### Workspace Settings
 
@@ -834,8 +911,8 @@ Lore Management brings inline quick reference, the relationship graph, and the s
 
 ##### Overview
 - **Nested Lore Database**: The lore folder supports subdirectories at any depth, and the plugin automatically scans Markdown documents within them
-- **Auto Annotation**: Create lore entries using level-2 headings (`##`) in categorized documents, and add `**Alias**: xxx` in the body. When you type canonical names or aliases in your novel text, the system automatically adds a dashed underline
-- **Single-File Entries**: If a lore document has no level-2 headings, the plugin treats its filename as one lore entry, supporting a one-file-per-entry organization style
+- **Canonical One-File Entries**: Organize lore by category folder and store every character, organization, location, or item in its own Markdown file. Headings inside the file structure that entity's content
+- **Legacy Collections**: Older collection notes that store several entries under level-2 headings remain readable, but newly created lore always uses independent files
 - **Hover/Tap Quick Reference**: Hover over annotated text on desktop or tap it on mobile to open a small window precisely positioned to that entry — no need to leave the editing page
 - **Right-Click "Write & Build"**: Select a new item or character name in the editor, right-click "Add as New Lore Entry," and quickly enter it in a dialog
 - **Alias Support**: In each entry body, use `Alias: xxx` or `别名：xxx`; the label may be bold, and either English or Chinese colons work. Separate multiple aliases with commas, enumeration commas, semicolons, slashes, or vertical bars; each alias maps to that entry
@@ -848,30 +925,34 @@ Lore Management brings inline quick reference, the relationship graph, and the s
 3. Enter the name of the folder for lore files (default: "Lore")
 4. Create this folder under each work's directory and place categorized lore documents in it
 
-###### Creating Lore Documents (Dictionary Outline Mode)
-Create categorized documents under the lore folder, using `## Level-2 Headings` as the canonical entry name:
+###### Creating Lore Documents (Canonical v0.3 Mode)
+Create one Markdown file per entity under the appropriate category folder:
 
 ```markdown
-# Characters
+---
+type: character
+id: CHR-0001
+title: Zhang San
+aliases:
+  - Brother San
+  - Xiao Zhang
+---
 
-## Zhang San
+# Zhang San
+
+## Identity
+
 The protagonist, a young swordsman.
-**Alias**: Brother San, Xiao Zhang
 
-## Li Si
-The villain, cunning and treacherous.
-**Alias**: Master Si
+## Character arc
 
-## Wang Wu
-Supporting character, a loyal companion.
+Moves from revenge toward protection.
 ```
 
 > **Tips**:
-> - Each level-2 heading (`##`) is a separate entry; the heading text is the canonical name
-> - When level-2 headings exist, level-1 (`#`) and level-3 (`###`) headings are not treated as separate entries
-> - If the entire file has no level-2 heading, its filename becomes the only entry name; aliases can still be added in the body or frontmatter
-> - Lore files may be organized in nested subfolders under the configured lore folder
-> - Aliases must be in the body of their level-2 entry. Use `Alias: xxx` or `别名：xxx` (bolding is optional); separate multiple aliases with commas, enumeration commas, semicolons, slashes, or vertical bars
+> - One Markdown file represents one entity. `##` and `###` headings only organize that entity and never create extra cards
+> - `type` and permanent `id` are used by Novel Console; put aliases in frontmatter when possible
+> - Legacy notes without canonical `type + id` metadata still interpret each `##` section as one entry; compatibility reads never split or rewrite the source file
 
 ###### Using Lore Quick Reference
 1. Type a character name or alias in your text (e.g., "Zhang San" or "Brother San")
@@ -884,8 +965,8 @@ When lore files or chapters already exist but lore highlighting, Workbench stati
 ###### Right-Click to Add New Lore
 1. Select a new name in the editor (e.g., "Xuan Tie Sword")
 2. Right-click → **Add as New Lore Entry**
-3. Fill in the lore name, select a categorized document, add aliases and description in the dialog
-4. Click save; the lore entry is automatically written to the corresponding categorized document
+3. Fill in the lore name, choose or enter a category folder and entity type, then add aliases, description, and optional relationships
+4. Click save; the plugin creates a separate Markdown file with canonical v0.3 frontmatter in that category folder
 
 > **Mobile**: Lore names and aliases are still recognized and shown with dashed underlines. Enable **Lore Hover Popover on Mobile** to tap and view a card; disabling it only disables the cards to prevent accidental taps while scrolling.
 
@@ -910,15 +991,13 @@ When lore files or chapters already exist but lore highlighting, Workbench stati
 2. The plugin will automatically infer the novel this document belongs to, load global characters, and open the graph view in the right sidebar.
 
 ###### Define Explicit Relationships
-1. In the lore document (e.g., `Characters.md`), find the character heading where you want to add relationships (e.g., `## Protagonist`).
-2. Create a level-3 heading named `### Relations` under the character name.
+1. Open the character's own lore file (for example, `Characters/John Doe.md`).
+2. Add a heading named `## Relations` or `### Relations`.
 3. Fill it out in the following format (bold text represents the **Relation Name**, followed by a colon and target characters separated by commas):
 ```markdown
-## John Doe
-**Alias**: Johnny
-**Description**: The Protagonist
+# John Doe
 
-### Relations
+## Relations
 - **Childhood Friend**: Jane Doe
 - **Arch-nemesis**: Bob, Alice
 ```
@@ -1443,10 +1522,10 @@ A:
 ## Feedback & Support
 
 ### Bug Reports
-- GitHub Issues: [Submit an Issue](https://github.com/HatanoChihiro/obsidian-webnovel-assistant/issues)
+- GitHub Issues: [Submit an Issue](https://github.com/undustcover/obsidian_webnovel_pro/issues)
 
 ### Feature Requests & Discussions
-- GitHub Discussions: [Join Discussions & Propose Ideas](https://github.com/HatanoChihiro/obsidian-webnovel-assistant/discussions)
+- GitHub Discussions: [Join Discussions & Propose Ideas](https://github.com/undustcover/obsidian_webnovel_pro/discussions)
 
 ### Changelog
 - [CHANGELOG.md](CHANGELOG.md)
